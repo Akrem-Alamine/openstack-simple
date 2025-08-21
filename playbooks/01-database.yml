@@ -1,0 +1,102 @@
+---
+- name: Install and configure database
+  hosts: controller
+  become: yes
+  tasks:
+    - name: Install MySQL server
+      apt:
+        name: 
+          - mysql-server
+          - python3-pymysql
+        state: present
+
+    - name: Configure MySQL bind address
+      lineinfile:
+        path: /etc/mysql/mysql.conf.d/mysqld.cnf
+        regexp: '^bind-address'
+        line: "bind-address = {{ controller_ip }}"
+        backup: yes
+      notify: restart mysql
+
+    - name: Start and enable MySQL
+      systemd:
+        name: mysql
+        state: started
+        enabled: yes
+
+    - name: Set MySQL root password
+      mysql_user:
+        name: root
+        password: "{{ mysql_root_password }}"
+        login_unix_socket: /var/run/mysqld/mysqld.sock
+        state: present
+
+    - name: Create MySQL configuration file
+      template:
+        content: |
+          [client]
+          user=root
+          password={{ mysql_root_password }}
+        dest: /root/.my.cnf
+        mode: '0600'
+
+    - name: Create OpenStack databases
+      mysql_db:
+        name: "{{ item }}"
+        state: present
+        login_user: root
+        login_password: "{{ mysql_root_password }}"
+      loop:
+        - keystone
+        - glance
+        - nova
+        - nova_api
+        - nova_cell0
+        - neutron
+        - cinder
+
+    - name: Create database users
+      mysql_user:
+        name: "{{ item.name }}"
+        password: "{{ item.password }}"
+        priv: "{{ item.db }}.*:ALL"
+        host: "%"
+        state: present
+        login_user: root
+        login_password: "{{ mysql_root_password }}"
+      loop:
+        - { name: "keystone", password: "{{ keystone_db_password }}", db: "keystone" }
+        - { name: "glance", password: "{{ glance_db_password }}", db: "glance" }
+        - { name: "nova", password: "{{ nova_db_password }}", db: "nova" }
+        - { name: "nova", password: "{{ nova_db_password }}", db: "nova_api" }
+        - { name: "nova", password: "{{ nova_db_password }}", db: "nova_cell0" }
+        - { name: "neutron", password: "{{ neutron_db_password }}", db: "neutron" }
+        - { name: "cinder", password: "{{ cinder_db_password }}", db: "cinder" }
+
+    - name: Install RabbitMQ
+      apt:
+        name: rabbitmq-server
+        state: present
+
+    - name: Start and enable RabbitMQ
+      systemd:
+        name: rabbitmq-server
+        state: started
+        enabled: yes
+
+    - name: Create RabbitMQ user
+      rabbitmq_user:
+        user: openstack
+        password: "{{ rabbit_password }}"
+        permissions:
+          - vhost: /
+            configure_priv: .*
+            read_priv: .*
+            write_priv: .*
+        state: present
+
+  handlers:
+    - name: restart mysql
+      systemd:
+        name: mysql
+        state: restarted

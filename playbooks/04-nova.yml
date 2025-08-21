@@ -1,0 +1,207 @@
+---
+- name: Install and configure Nova (Controller)
+  hosts: controller
+  become: yes
+  tasks:
+    - name: Install Nova packages
+      apt:
+        name:
+          - nova-api
+          - nova-conductor
+          - nova-novncproxy
+          - nova-scheduler
+        state: present
+
+    - name: Create nova user
+      shell: |
+        source /root/admin-openrc
+        openstack user create --domain default --password {{ nova_password }} nova
+      args:
+        creates: /tmp/nova_user_created
+
+    - name: Add admin role to nova user
+      shell: |
+        source /root/admin-openrc
+        openstack role add --project service --user nova admin
+
+    - name: Create nova service
+      shell: |
+        source /root/admin-openrc
+        openstack service create --name nova --description "OpenStack Compute" compute
+      args:
+        creates: /tmp/nova_service_created
+
+    - name: Create nova endpoints
+      shell: |
+        source /root/admin-openrc
+        openstack endpoint create --region RegionOne compute public http://{{ controller_ip }}:8774/v2.1
+        openstack endpoint create --region RegionOne compute internal http://{{ controller_ip }}:8774/v2.1
+        openstack endpoint create --region RegionOne compute admin http://{{ controller_ip }}:8774/v2.1
+      args:
+        creates: /tmp/nova_endpoints_created
+
+    - name: Configure Nova API database
+      ini_file:
+        path: /etc/nova/nova.conf
+        section: api_database
+        option: connection
+        value: "{{ nova_api_database_connection }}"
+        backup: yes
+
+    - name: Configure Nova database
+      ini_file:
+        path: /etc/nova/nova.conf
+        section: database
+        option: connection
+        value: "{{ nova_database_connection }}"
+
+    - name: Configure Nova default settings
+      ini_file:
+        path: /etc/nova/nova.conf
+        section: DEFAULT
+        option: "{{ item.option }}"
+        value: "{{ item.value }}"
+      loop:
+        - { option: "transport_url", value: "{{ transport_url }}" }
+        - { option: "my_ip", value: "{{ controller_ip }}" }
+
+    - name: Configure Nova API keystone authentication
+      ini_file:
+        path: /etc/nova/nova.conf
+        section: keystone_authtoken
+        option: "{{ item.option }}"
+        value: "{{ item.value }}"
+      loop:
+        - { option: "www_authenticate_uri", value: "http://{{ controller_ip }}:5000/" }
+        - { option: "auth_url", value: "http://{{ controller_ip }}:5000/" }
+        - { option: "memcached_servers", value: "{{ controller_ip }}:11211" }
+        - { option: "auth_type", value: "password" }
+        - { option: "project_domain_name", value: "Default" }
+        - { option: "user_domain_name", value: "Default" }
+        - { option: "project_name", value: "service" }
+        - { option: "username", value: "nova" }
+        - { option: "password", value: "{{ nova_password }}" }
+
+    - name: Configure Nova VNC settings
+      ini_file:
+        path: /etc/nova/nova.conf
+        section: vnc
+        option: "{{ item.option }}"
+        value: "{{ item.value }}"
+      loop:
+        - { option: "enabled", value: "true" }
+        - { option: "server_listen", value: "$my_ip" }
+        - { option: "server_proxyclient_address", value: "$my_ip" }
+
+    - name: Configure Nova Glance settings
+      ini_file:
+        path: /etc/nova/nova.conf
+        section: glance
+        option: api_servers
+        value: "http://{{ controller_ip }}:9292"
+
+    - name: Configure Nova placement settings
+      ini_file:
+        path: /etc/nova/nova.conf
+        section: placement
+        option: "{{ item.option }}"
+        value: "{{ item.value }}"
+      loop:
+        - { option: "region_name", value: "RegionOne" }
+        - { option: "project_domain_name", value: "Default" }
+        - { option: "project_name", value: "service" }
+        - { option: "auth_type", value: "password" }
+        - { option: "user_domain_name", value: "Default" }
+        - { option: "auth_url", value: "http://{{ controller_ip }}:5000/v3" }
+        - { option: "username", value: "placement" }
+        - { option: "password", value: "{{ nova_password }}" }
+
+    - name: Populate Nova API database
+      shell: nova-manage api_db sync
+      become_user: nova
+
+    - name: Register cell0 database
+      shell: nova-manage cell_v2 map_cell0
+      become_user: nova
+
+    - name: Create cell1 cell
+      shell: nova-manage cell_v2 create_cell --name=cell1 --verbose
+      become_user: nova
+      ignore_errors: yes
+
+    - name: Populate Nova database
+      shell: nova-manage db sync
+      become_user: nova
+
+    - name: Start and enable Nova services
+      systemd:
+        name: "{{ item }}"
+        state: started
+        enabled: yes
+      loop:
+        - nova-api
+        - nova-scheduler
+        - nova-conductor
+        - nova-novncproxy
+
+    - name: Mark nova services as created
+      file:
+        path: "{{ item }}"
+        state: touch
+        mode: '0644'
+      loop:
+        - /tmp/nova_user_created
+        - /tmp/nova_service_created
+        - /tmp/nova_endpoints_created
+
+- name: Install and configure Nova Compute
+  hosts: compute
+  become: yes
+  tasks:
+    - name: Install Nova Compute
+      apt:
+        name: nova-compute
+        state: present
+
+    - name: Configure Nova Compute database
+      ini_file:
+        path: /etc/nova/nova.conf
+        section: database
+        option: connection
+        value: "{{ nova_database_connection }}"
+        backup: yes
+
+    - name: Configure Nova Compute default settings
+      ini_file:
+        path: /etc/nova/nova.conf
+        section: DEFAULT
+        option: "{{ item.option }}"
+        value: "{{ item.value }}"
+      loop:
+        - { option: "transport_url", value: "{{ transport_url }}" }
+        - { option: "my_ip", value: "{{ compute_ip }}" }
+
+    - name: Configure Nova Compute VNC settings
+      ini_file:
+        path: /etc/nova/nova.conf
+        section: vnc
+        option: "{{ item.option }}"
+        value: "{{ item.value }}"
+      loop:
+        - { option: "enabled", value: "true" }
+        - { option: "server_listen", value: "0.0.0.0" }
+        - { option: "server_proxyclient_address", value: "$my_ip" }
+        - { option: "novncproxy_base_url", value: "http://{{ controller_ip }}:6080/vnc_auto.html" }
+
+    - name: Configure Nova Compute libvirt settings
+      ini_file:
+        path: /etc/nova/nova.conf
+        section: libvirt
+        option: virt_type
+        value: "{{ virt_type }}"
+
+    - name: Start and enable Nova Compute
+      systemd:
+        name: nova-compute
+        state: started
+        enabled: yes

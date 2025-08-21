@@ -1,0 +1,100 @@
+---
+- name: Install and configure Glance
+  hosts: controller
+  become: yes
+  tasks:
+    - name: Install Glance
+      apt:
+        name: glance
+        state: present
+
+    - name: Create glance user
+      shell: |
+        source /root/admin-openrc
+        openstack user create --domain default --password {{ glance_password }} glance
+      args:
+        creates: /tmp/glance_user_created
+
+    - name: Add admin role to glance user
+      shell: |
+        source /root/admin-openrc
+        openstack role add --project service --user glance admin
+
+    - name: Create glance service
+      shell: |
+        source /root/admin-openrc
+        openstack service create --name glance --description "OpenStack Image" image
+      args:
+        creates: /tmp/glance_service_created
+
+    - name: Create glance endpoints
+      shell: |
+        source /root/admin-openrc
+        openstack endpoint create --region RegionOne image public http://{{ controller_ip }}:9292
+        openstack endpoint create --region RegionOne image internal http://{{ controller_ip }}:9292
+        openstack endpoint create --region RegionOne image admin http://{{ controller_ip }}:9292
+      args:
+        creates: /tmp/glance_endpoints_created
+
+    - name: Configure Glance API database
+      ini_file:
+        path: /etc/glance/glance-api.conf
+        section: database
+        option: connection
+        value: "{{ glance_database_connection }}"
+        backup: yes
+
+    - name: Configure Glance API keystone authentication
+      ini_file:
+        path: /etc/glance/glance-api.conf
+        section: keystone_authtoken
+        option: "{{ item.option }}"
+        value: "{{ item.value }}"
+      loop:
+        - { option: "www_authenticate_uri", value: "http://{{ controller_ip }}:5000" }
+        - { option: "auth_url", value: "http://{{ controller_ip }}:5000" }
+        - { option: "memcached_servers", value: "{{ controller_ip }}:11211" }
+        - { option: "auth_type", value: "password" }
+        - { option: "project_domain_name", value: "Default" }
+        - { option: "user_domain_name", value: "Default" }
+        - { option: "project_name", value: "service" }
+        - { option: "username", value: "glance" }
+        - { option: "password", value: "{{ glance_password }}" }
+
+    - name: Configure Glance API paste_deploy
+      ini_file:
+        path: /etc/glance/glance-api.conf
+        section: paste_deploy
+        option: flavor
+        value: keystone
+
+    - name: Configure Glance API glance_store
+      ini_file:
+        path: /etc/glance/glance-api.conf
+        section: glance_store
+        option: "{{ item.option }}"
+        value: "{{ item.value }}"
+      loop:
+        - { option: "stores", value: "file,http" }
+        - { option: "default_store", value: "file" }
+        - { option: "filesystem_store_datadir", value: "/var/lib/glance/images/" }
+
+    - name: Populate Glance database
+      shell: glance-manage db_sync
+      become_user: glance
+
+    - name: Start and enable Glance API
+      systemd:
+        name: glance-api
+        state: started
+        enabled: yes
+
+    - name: Mark services as created
+      file:
+        path: "{{ item }}"
+        state: touch
+        mode: '0644'
+      loop:
+        - /tmp/glance_user_created
+        - /tmp/glance_service_created
+        - /tmp/glance_endpoints_created

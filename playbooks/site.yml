@@ -1,0 +1,31 @@
+---
+- name: Deploy Simple OpenStack
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Display deployment start message
+      debug:
+        msg: "Starting OpenStack deployment across {{ groups['openstack'] | length }} nodes"
+
+- import_playbook: 00-prerequisites.yml
+- import_playbook: 01-database.yml
+- import_playbook: 02-keystone.yml
+- import_playbook: 03-glance.yml
+- import_playbook: 04-nova.yml
+- import_playbook: 05-neutron.yml
+- import_playbook: 06-cinder.yml
+- import_playbook: 07-horizon.yml
+
+- name: Deployment Complete
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Display completion message
+      debug:
+        msg: |
+          OpenStack deployment completed!
+          
+          Access Horizon dashboard at: http://{{ controller_ip }}/horizon
+          Username: admin
+          Password: {{ admin_password }}
+          Domain: Default

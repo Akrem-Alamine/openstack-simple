@@ -1,0 +1,81 @@
+---
+- name: Install and configure Keystone
+  hosts: controller
+  become: yes
+  tasks:
+    - name: Install Keystone
+      apt:
+        name: keystone
+        state: present
+
+    - name: Configure Keystone database
+      ini_file:
+        path: /etc/keystone/keystone.conf
+        section: database
+        option: connection
+        value: "{{ keystone_database_connection }}"
+        backup: yes
+
+    - name: Configure Keystone token provider
+      ini_file:
+        path: /etc/keystone/keystone.conf
+        section: token
+        option: provider
+        value: fernet
+
+    - name: Populate Keystone database
+      shell: keystone-manage db_sync
+      become_user: keystone
+
+    - name: Initialize Fernet key repositories
+      shell: |
+        keystone-manage fernet_setup --keystone-user keystone --keystone-group keystone
+        keystone-manage credential_setup --keystone-user keystone --keystone-group keystone
+
+    - name: Bootstrap Keystone
+      shell: |
+        keystone-manage bootstrap \
+          --bootstrap-password {{ keystone_admin_password }} \
+          --bootstrap-admin-url http://{{ controller_ip }}:5000/v3/ \
+          --bootstrap-internal-url http://{{ controller_ip }}:5000/v3/ \
+          --bootstrap-public-url http://{{ controller_ip }}:5000/v3/ \
+          --bootstrap-region-id RegionOne
+
+    - name: Configure Apache ServerName
+      lineinfile:
+        path: /etc/apache2/apache2.conf
+        line: "ServerName {{ controller_ip }}"
+        state: present
+
+    - name: Start and enable Apache
+      systemd:
+        name: apache2
+        state: started
+        enabled: yes
+
+    - name: Create admin credentials file
+      copy:
+        content: |
+          export OS_PROJECT_DOMAIN_NAME=Default
+          export OS_USER_DOMAIN_NAME=Default
+          export OS_PROJECT_NAME=admin
+          export OS_USERNAME=admin
+          export OS_PASSWORD={{ keystone_admin_password }}
+          export OS_AUTH_URL=http://{{ controller_ip }}:5000/v3
+          export OS_IDENTITY_API_VERSION=3
+          export OS_IMAGE_API_VERSION=2
+        dest: /root/admin-openrc
+        mode: '0600'
+
+    - name: Create service project
+      shell: |
+        source /root/admin-openrc
+        openstack project create --domain default --description "Service Project" service
+      args:
+        creates: /tmp/service_project_created
+
+    - name: Mark service project as created
+      file:
+        path: /tmp/service_project_created
+        state: touch
+        mode: '0644'

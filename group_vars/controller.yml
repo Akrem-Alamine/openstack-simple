@@ -1,0 +1,30 @@
+# Controller node specific variables
+services_to_install:
+  - mysql-server
+  - rabbitmq-server
+  - keystone
+  - glance
+  - nova-api
+  - nova-conductor
+  - nova-scheduler
+  - neutron-server
+  - neutron-plugin-ml2
+  - horizon
+
+# Database configuration
+mysql_root_password: "{{ database_password }}"
+mysql_bind_address: "{{ controller_ip }}"
+
+# Keystone configuration
+keystone_database_connection: "mysql+pymysql://keystone:{{ keystone_db_password }}@{{ controller_ip }}/keystone"
+
+# Glance configuration
+glance_database_connection: "mysql+pymysql://glance:{{ glance_db_password }}@{{ controller_ip }}/glance"
+
+# Nova configuration
+nova_database_connection: "mysql+pymysql://nova:{{ nova_db_password }}@{{ controller_ip }}/nova"
+nova_api_database_connection: "mysql+pymysql://nova:{{ nova_db_password }}@{{ controller_ip }}/nova_api"
+nova_cell0_database_connection: "mysql+pymysql://nova:{{ nova_db_password }}@{{ controller_ip }}/nova_cell0"
+
+# Neutron configuration
+neutron_database_connection: "mysql+pymysql://neutron:{{ neutron_db_password }}@{{ controller_ip }}/neutron"

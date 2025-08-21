@@ -1,0 +1,145 @@
+---
+- name: Install and configure Horizon
+  hosts: controller
+  become: yes
+  tasks:
+    - name: Install Horizon packages
+      apt:
+        name:
+          - openstack-dashboard
+          - python3-openstackclient
+        state: present
+
+    - name: Configure Horizon settings
+      lineinfile:
+        path: /etc/openstack-dashboard/local_settings.py
+        regexp: "{{ item.regexp }}"
+        line: "{{ item.line }}"
+        backup: yes
+      loop:
+        - { regexp: "^OPENSTACK_HOST.*", line: "OPENSTACK_HOST = \"{{ controller_ip }}\"" }
+        - { regexp: "^ALLOWED_HOSTS.*", line: "ALLOWED_HOSTS = ['*']" }
+        - { regexp: "^#?SESSION_ENGINE.*", line: "SESSION_ENGINE = 'django.contrib.sessions.backends.cache'" }
+        - { regexp: "^TIME_ZONE.*", line: "TIME_ZONE = \"{{ timezone }}\"" }
+
+    - name: Add caching configuration to Horizon
+      blockinfile:
+        path: /etc/openstack-dashboard/local_settings.py
+        marker: "# {mark} ANSIBLE MANAGED BLOCK - CACHING"
+        block: |
+          CACHES = {
+              'default': {
+                  'BACKEND': 'django.core.cache.backends.memcached.MemcachedCache',
+                  'LOCATION': '{{ controller_ip }}:11211',
+              }
+          }
+
+    - name: Configure Horizon API versions
+      blockinfile:
+        path: /etc/openstack-dashboard/local_settings.py
+        marker: "# {mark} ANSIBLE MANAGED BLOCK - API VERSIONS"
+        block: |
+          OPENSTACK_KEYSTONE_MULTIDOMAIN_SUPPORT = True
+          OPENSTACK_API_VERSIONS = {
+              "identity": 3,
+              "image": 2,
+              "volume": 3,
+          }
+          OPENSTACK_KEYSTONE_DEFAULT_DOMAIN = "Default"
+          OPENSTACK_KEYSTONE_DEFAULT_ROLE = "member"
+
+    - name: Install memcached
+      apt:
+        name: memcached
+        state: present
+
+    - name: Configure memcached
+      lineinfile:
+        path: /etc/memcached.conf
+        regexp: '^-l.*'
+        line: "-l {{ controller_ip }}"
+        backup: yes
+      notify: restart memcached
+
+    - name: Start and enable memcached
+      systemd:
+        name: memcached
+        state: started
+        enabled: yes
+
+    - name: Reload Apache configuration
+      systemd:
+        name: apache2
+        state: reloaded
+
+    - name: Create demo project and user
+      shell: |
+        source /root/admin-openrc
+        openstack project create --domain default --description "Demo Project" demo || true
+        openstack user create --domain default --password demo demo || true
+        openstack role create member || true
+        openstack role add --project demo --user demo member || true
+      args:
+        creates: /tmp/demo_setup_created
+
+    - name: Create demo credentials file
+      copy:
+        content: |
+          export OS_PROJECT_DOMAIN_NAME=Default
+          export OS_USER_DOMAIN_NAME=Default
+          export OS_PROJECT_NAME=demo
+          export OS_USERNAME=demo
+          export OS_PASSWORD=demo
+          export OS_AUTH_URL=http://{{ controller_ip }}:5000/v3
+          export OS_IDENTITY_API_VERSION=3
+          export OS_IMAGE_API_VERSION=2
+        dest: /root/demo-openrc
+        mode: '0600'
+
+    - name: Download test image
+      get_url:
+        url: http://download.cirros-cloud.net/0.5.2/cirros-0.5.2-x86_64-disk.img
+        dest: /tmp/cirros-0.5.2-x86_64-disk.img
+        mode: '0644'
+
+    - name: Upload test image to Glance
+      shell: |
+        source /root/admin-openrc
+        openstack image create "cirros" \
+          --file /tmp/cirros-0.5.2-x86_64-disk.img \
+          --disk-format qcow2 --container-format bare \
+          --public
+      args:
+        creates: /tmp/cirros_image_created
+
+    - name: Create default flavor
+      shell: |
+        source /root/admin-openrc
+        openstack flavor create --id 0 --vcpus 1 --ram 64 --disk 1 m1.nano || true
+      args:
+        creates: /tmp/flavor_created
+
+    - name: Create default security group rules
+      shell: |
+        source /root/demo-openrc
+        openstack security group rule create --proto icmp default || true
+        openstack security group rule create --proto tcp --dst-port 22 default || true
+      args:
+        creates: /tmp/security_rules_created
+
+    - name: Mark setup tasks as completed
+      file:
+        path: "{{ item }}"
+        state: touch
+        mode: '0644'
+      loop:
+        - /tmp/demo_setup_created
+        - /tmp/cirros_image_created
+        - /tmp/flavor_created
+        - /tmp/security_rules_created
+
+  handlers:
+    - name: restart memcached
+      systemd:
+        name: memcached
+        state: restarted

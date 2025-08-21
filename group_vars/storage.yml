@@ -1,0 +1,12 @@
+# Storage node specific variables
+services_to_install:
+  - cinder-volume
+  - lvm2
+  - thin-provisioning-tools
+
+# Cinder configuration
+cinder_database_connection: "mysql+pymysql://cinder:{{ cinder_db_password }}@{{ controller_ip }}/cinder"
+
+# LVM configuration
+volume_group: "cinder-volumes"
+volume_device: "/dev/sdb"  # Adjust based on your setup

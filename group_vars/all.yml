@@ -1,0 +1,41 @@
+# Global variables for all nodes
+openstack_release: "yoga"
+admin_password: "openstack123"
+database_password: "db_pass123"
+rabbit_password: "rabbit_pass123"
+keystone_db_password: "keystone_pass123"
+glance_db_password: "glance_pass123"
+nova_db_password: "nova_pass123"
+neutron_db_password: "neutron_pass123"
+cinder_db_password: "cinder_pass123"
+
+# Service passwords
+keystone_admin_password: "{{ admin_password }}"
+glance_password: "glance_pass123"
+nova_password: "nova_pass123"
+neutron_password: "neutron_pass123"
+cinder_password: "cinder_pass123"
+
+# Network configuration
+management_interface: "ens4"
+provider_interface: "ens5"
+overlay_interface: "{{ management_interface }}"
+
+# Controller node info
+controller_ip: "10.0.0.10"
+storage_ip: "10.0.0.20"
+compute_ip: "10.0.0.30"
+
+# Database connection
+database_connection: "mysql+pymysql://{{ database_user }}:{{ database_password }}@{{ controller_ip }}/{{ database_name }}"
+
+# Message queue
+transport_url: "rabbit://openstack:{{ rabbit_password }}@{{ controller_ip }}:5672/"
+
+# Keystone endpoint
+auth_url: "http://{{ controller_ip }}:5000/v3"
+admin_project_name: "admin"
+admin_username: "admin"
+
+# Time zone
+timezone: "UTC"

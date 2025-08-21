@@ -1,0 +1,50 @@
+---
+- name: Prepare all nodes
+  hosts: openstack
+  become: yes
+  tasks:
+    - name: Update package cache
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+
+    - name: Install prerequisite packages
+      apt:
+        name:
+          - python3-pip
+          - software-properties-common
+          - curl
+          - wget
+        state: present
+
+    - name: Add OpenStack repository
+      apt_repository:
+        repo: "cloud-archive:{{ openstack_release }}"
+        state: present
+        update_cache: yes
+
+    - name: Install OpenStack client
+      apt:
+        name: python3-openstackclient
+        state: present
+
+    - name: Set timezone
+      timezone:
+        name: "{{ timezone }}"
+
+    - name: Configure /etc/hosts
+      lineinfile:
+        path: /etc/hosts
+        line: "{{ hostvars[item]['ansible_host'] }} {{ item }}"
+        state: present
+      loop: "{{ groups['openstack'] }}"
+
+    - name: Disable firewall (for simplicity)
+      ufw:
+        state: disabled
+
+    - name: Create openstack user
+      user:
+        name: openstack
+        shell: /bin/bash
+        create_home: yes

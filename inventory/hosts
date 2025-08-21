@@ -1,0 +1,13 @@
+[controller]
+controller ansible_host=10.0.0.10 ansible_user=ubuntu
+
+[storage]
+storage ansible_host=10.0.0.20 ansible_user=ubuntu
+
+[compute]
+compute ansible_host=10.0.0.30 ansible_user=ubuntu
+
+[openstack:children]
+controller
+storage
+compute

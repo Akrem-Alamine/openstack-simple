@@ -1,0 +1,181 @@
+---
+- name: Install and configure Cinder (Controller)
+  hosts: controller
+  become: yes
+  tasks:
+    - name: Install Cinder packages
+      apt:
+        name:
+          - cinder-api
+          - cinder-scheduler
+        state: present
+
+    - name: Create cinder user
+      shell: |
+        source /root/admin-openrc
+        openstack user create --domain default --password {{ cinder_password }} cinder
+      args:
+        creates: /tmp/cinder_user_created
+
+    - name: Add admin role to cinder user
+      shell: |
+        source /root/admin-openrc
+        openstack role add --project service --user cinder admin
+
+    - name: Create cinder services
+      shell: |
+        source /root/admin-openrc
+        openstack service create --name cinderv2 --description "OpenStack Block Storage" volumev2
+        openstack service create --name cinderv3 --description "OpenStack Block Storage" volumev3
+      args:
+        creates: /tmp/cinder_service_created
+
+    - name: Create cinder endpoints
+      shell: |
+        source /root/admin-openrc
+        openstack endpoint create --region RegionOne volumev2 public http://{{ controller_ip }}:8776/v2/%\(project_id\)s
+        openstack endpoint create --region RegionOne volumev2 internal http://{{ controller_ip }}:8776/v2/%\(project_id\)s
+        openstack endpoint create --region RegionOne volumev2 admin http://{{ controller_ip }}:8776/v2/%\(project_id\)s
+        openstack endpoint create --region RegionOne volumev3 public http://{{ controller_ip }}:8776/v3/%\(project_id\)s
+        openstack endpoint create --region RegionOne volumev3 internal http://{{ controller_ip }}:8776/v3/%\(project_id\)s
+        openstack endpoint create --region RegionOne volumev3 admin http://{{ controller_ip }}:8776/v3/%\(project_id\)s
+      args:
+        creates: /tmp/cinder_endpoints_created
+
+    - name: Configure Cinder database
+      ini_file:
+        path: /etc/cinder/cinder.conf
+        section: database
+        option: connection
+        value: "{{ cinder_database_connection }}"
+        backup: yes
+
+    - name: Configure Cinder default settings
+      ini_file:
+        path: /etc/cinder/cinder.conf
+        section: DEFAULT
+        option: "{{ item.option }}"
+        value: "{{ item.value }}"
+      loop:
+        - { option: "transport_url", value: "{{ transport_url }}" }
+        - { option: "auth_strategy", value: "keystone" }
+        - { option: "my_ip", value: "{{ controller_ip }}" }
+
+    - name: Configure Cinder keystone authentication
+      ini_file:
+        path: /etc/cinder/cinder.conf
+        section: keystone_authtoken
+        option: "{{ item.option }}"
+        value: "{{ item.value }}"
+      loop:
+        - { option: "www_authenticate_uri", value: "http://{{ controller_ip }}:5000" }
+        - { option: "auth_url", value: "http://{{ controller_ip }}:5000" }
+        - { option: "memcached_servers", value: "{{ controller_ip }}:11211" }
+        - { option: "auth_type", value: "password" }
+        - { option: "project_domain_name", value: "Default" }
+        - { option: "user_domain_name", value: "Default" }
+        - { option: "project_name", value: "service" }
+        - { option: "username", value: "cinder" }
+        - { option: "password", value: "{{ cinder_password }}" }
+
+    - name: Populate Cinder database
+      shell: cinder-manage db sync
+      become_user: cinder
+
+    - name: Start and enable Cinder services
+      systemd:
+        name: "{{ item }}"
+        state: started
+        enabled: yes
+      loop:
+        - cinder-scheduler
+        - apache2
+
+    - name: Mark cinder services as created
+      file:
+        path: "{{ item }}"
+        state: touch
+        mode: '0644'
+      loop:
+        - /tmp/cinder_user_created
+        - /tmp/cinder_service_created
+        - /tmp/cinder_endpoints_created
+
+- name: Install and configure Cinder Volume (Storage)
+  hosts: storage
+  become: yes
+  tasks:
+    - name: Install Cinder Volume and LVM packages
+      apt:
+        name:
+          - cinder-volume
+          - lvm2
+          - thin-provisioning-tools
+        state: present
+
+    - name: Create physical volume (if device exists)
+      shell: pvcreate {{ volume_device }}
+      ignore_errors: yes
+
+    - name: Create volume group
+      shell: vgcreate {{ volume_group }} {{ volume_device }}
+      ignore_errors: yes
+
+    - name: Configure Cinder Volume database
+      ini_file:
+        path: /etc/cinder/cinder.conf
+        section: database
+        option: connection
+        value: "{{ cinder_database_connection }}"
+        backup: yes
+
+    - name: Configure Cinder Volume default settings
+      ini_file:
+        path: /etc/cinder/cinder.conf
+        section: DEFAULT
+        option: "{{ item.option }}"
+        value: "{{ item.value }}"
+      loop:
+        - { option: "transport_url", value: "{{ transport_url }}" }
+        - { option: "auth_strategy", value: "keystone" }
+        - { option: "my_ip", value: "{{ storage_ip }}" }
+        - { option: "enabled_backends", value: "lvm" }
+        - { option: "glance_api_servers", value: "http://{{ controller_ip }}:9292" }
+
+    - name: Configure Cinder Volume keystone authentication
+      ini_file:
+        path: /etc/cinder/cinder.conf
+        section: keystone_authtoken
+        option: "{{ item.option }}"
+        value: "{{ item.value }}"
+      loop:
+        - { option: "www_authenticate_uri", value: "http://{{ controller_ip }}:5000" }
+        - { option: "auth_url", value: "http://{{ controller_ip }}:5000" }
+        - { option: "memcached_servers", value: "{{ controller_ip }}:11211" }
+        - { option: "auth_type", value: "password" }
+        - { option: "project_domain_name", value: "Default" }
+        - { option: "user_domain_name", value: "Default" }
+        - { option: "project_name", value: "service" }
+        - { option: "username", value: "cinder" }
+        - { option: "password", value: "{{ cinder_password }}" }
+
+    - name: Configure LVM backend
+      ini_file:
+        path: /etc/cinder/cinder.conf
+        section: lvm
+        option: "{{ item.option }}"
+        value: "{{ item.value }}"
+      loop:
+        - { option: "volume_driver", value: "cinder.volume.drivers.lvm.LVMVolumeDriver" }
+        - { option: "volume_group", value: "{{ volume_group }}" }
+        - { option: "target_protocol", value: "iscsi" }
+        - { option: "target_helper", value: "tgtadm" }
+
+    - name: Start and enable Cinder Volume
+      systemd:
+        name: "{{ item }}"
+        state: started
+        enabled: yes
+      loop:
+        - tgt
+        - cinder-volume

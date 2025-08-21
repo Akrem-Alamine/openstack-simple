@@ -1,0 +1,13 @@
+# Compute node specific variables
+services_to_install:
+  - nova-compute
+  - neutron-linuxbridge-agent
+
+# Nova configuration
+nova_database_connection: "mysql+pymysql://nova:{{ nova_db_password }}@{{ controller_ip }}/nova"
+
+# Neutron configuration
+neutron_database_connection: "mysql+pymysql://neutron:{{ neutron_db_password }}@{{ controller_ip }}/neutron"
+
+# Hypervisor configuration
+virt_type: "qemu"  # Use "kvm" if nested virtualization is enabled
