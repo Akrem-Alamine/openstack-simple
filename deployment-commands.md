@@ -9,9 +9,11 @@ Since you're on Windows and need to get these files to your GCP VM host, you hav
 # On your GCP VM host (controller node):
 sudo apt update
 sudo apt install -y git ansible
-git clone https://github.com/yourusername/openstack-simple.git
+git clone https://github.com/YOURUSERNAME/openstack-simple.git
 cd openstack-simple
 ```
+
+**Note**: Replace `YOURUSERNAME` with your actual GitHub username after creating the repository.
 
 ### Option B: Using SCP from Windows
 ```powershell
