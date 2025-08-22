@@ -1,8 +1,12 @@
-# Global variables for all nodes
+# OpenStack Simple Configuration
 openstack_release: "yoga"
+
+# Simple passwords
 admin_password: "openstack123"
 database_password: "db_pass123"
 rabbit_password: "rabbit_pass123"
+
+# Service database passwords
 keystone_db_password: "keystone_pass123"
 glance_db_password: "glance_pass123"
 nova_db_password: "nova_pass123"
@@ -16,26 +20,22 @@ nova_password: "nova_pass123"
 neutron_password: "neutron_pass123"
 cinder_password: "cinder_pass123"
 
-# Network configuration
-management_interface: "ens4"
-provider_interface: "ens5"
-overlay_interface: "{{ management_interface }}"
+# Network interface (usually first interface in Ubuntu VMs)
+management_interface: "enp1s0"
+provider_interface: "enp1s0"
 
-# Controller node info
-controller_ip: "10.0.0.10"
-storage_ip: "10.0.0.20"
-compute_ip: "10.0.0.30"
+# Node IPs (will be updated by setup script)
+controller_ip: "192.168.122.10"
+compute_ip: "192.168.122.11"
+storage_ip: "192.168.122.12"
 
-# Database connection
-database_connection: "mysql+pymysql://{{ database_user }}:{{ database_password }}@{{ controller_ip }}/{{ database_name }}"
-
-# Message queue
+# Connection strings
 transport_url: "rabbit://openstack:{{ rabbit_password }}@{{ controller_ip }}:5672/"
-
-# Keystone endpoint
 auth_url: "http://{{ controller_ip }}:5000/v3"
+
+# Admin credentials
 admin_project_name: "admin"
 admin_username: "admin"
 
-# Time zone
+# Basic settings
 timezone: "UTC"

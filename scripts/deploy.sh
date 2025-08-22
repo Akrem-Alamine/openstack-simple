@@ -1,33 +1,40 @@
 #!/bin/bash
 
 # Simple OpenStack Deployment Script
-# This script deploys a minimal OpenStack environment
-
 set -e
 
 echo "========================================"
 echo "Simple OpenStack Deployment Starting..."
 echo "========================================"
 
-# Check if running as root
-if [[ $EUID -eq 0 ]]; then
-   echo "This script should not be run as root. Please run as a regular user with sudo privileges."
-   exit 1
-fi
-
-# Check if Ansible is installed
+# Check Ansible
 if ! command -v ansible-playbook &> /dev/null; then
     echo "Installing Ansible..."
     sudo apt update
     sudo apt install -y ansible
 fi
 
-# Validate inventory
-echo "Validating inventory..."
-if ! ansible all -i inventory/hosts -m ping; then
-    echo "ERROR: Cannot reach all hosts. Please check your inventory file and SSH connectivity."
+# Test connectivity
+echo "Testing VM connectivity..."
+ansible all -i inventory/hosts -m ping || {
+    echo "ERROR: Cannot reach VMs. Check:"
+    echo "1. VMs are running: virsh list"
+    echo "2. IPs are correct in inventory/hosts"
+    echo "3. Password ubuntu123 works"
     exit 1
-fi
+}
+
+echo "Starting OpenStack deployment..."
+ansible-playbook -i inventory/hosts playbooks/site.yml
+
+echo "========================================"
+echo "Deployment completed!"
+echo "========================================"
+echo "Access Horizon:"
+echo "1. Get controller IP: virsh domifaddr controller"
+echo "2. SSH tunnel: ssh -L 8080:CONTROLLER_IP:80 username@YOUR-GCP-VM"
+echo "3. Open: http://localhost:8080/horizon"
+echo "4. Login: admin / openstack123"
 
 # Run the deployment
 echo "Starting OpenStack deployment..."

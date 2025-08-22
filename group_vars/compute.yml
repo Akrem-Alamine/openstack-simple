@@ -1,7 +1,8 @@
-# Compute node specific variables
+# Compute node specific variables for Ubuntu 22.04
 services_to_install:
   - nova-compute
   - neutron-linuxbridge-agent
+  - qemu-guest-agent
 
 # Nova configuration
 nova_database_connection: "mysql+pymysql://nova:{{ nova_db_password }}@{{ controller_ip }}/nova"
@@ -9,5 +10,6 @@ nova_database_connection: "mysql+pymysql://nova:{{ nova_db_password }}@{{ contro
 # Neutron configuration
 neutron_database_connection: "mysql+pymysql://neutron:{{ neutron_db_password }}@{{ controller_ip }}/neutron"
 
-# Hypervisor configuration
-virt_type: "qemu"  # Use "kvm" if nested virtualization is enabled
+# Hypervisor configuration - optimized for Ubuntu 22.04
+virt_type: "kvm"  # Use KVM with Ubuntu 22.04 cloud images
+cpu_mode: "host-passthrough"  # Better performance with nested virtualization

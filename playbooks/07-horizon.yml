@@ -96,26 +96,28 @@
         dest: /root/demo-openrc
         mode: '0600'
 
-    - name: Download test image
+    - name: Download Cirros test image (latest)
       get_url:
-        url: http://download.cirros-cloud.net/0.5.2/cirros-0.5.2-x86_64-disk.img
-        dest: /tmp/cirros-0.5.2-x86_64-disk.img
+        url: http://download.cirros-cloud.net/0.6.2/cirros-0.6.2-x86_64-disk.img
+        dest: /tmp/cirros-0.6.2-x86_64-disk.img
         mode: '0644'
 
     - name: Upload test image to Glance
       shell: |
         source /root/admin-openrc
         openstack image create "cirros" \
-          --file /tmp/cirros-0.5.2-x86_64-disk.img \
+          --file /tmp/cirros-0.6.2-x86_64-disk.img \
           --disk-format qcow2 --container-format bare \
           --public
       args:
         creates: /tmp/cirros_image_created
 
-    - name: Create default flavor
+    - name: Create default flavors for testing
       shell: |
         source /root/admin-openrc
         openstack flavor create --id 0 --vcpus 1 --ram 64 --disk 1 m1.nano || true
+        openstack flavor create --id 1 --vcpus 1 --ram 512 --disk 1 m1.tiny || true
+        openstack flavor create --id 2 --vcpus 1 --ram 2048 --disk 20 m1.small || true
       args:
         creates: /tmp/flavor_created
 

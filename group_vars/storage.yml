@@ -9,4 +9,4 @@ cinder_database_connection: "mysql+pymysql://cinder:{{ cinder_db_password }}@{{ 
 
 # LVM configuration
 volume_group: "cinder-volumes"
-volume_device: "/dev/sdb"  # Adjust based on your setup
+volume_device: "/dev/vdb"  # Matches attached cinder-volumes disk (see setup instructions)

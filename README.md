@@ -1,53 +1,96 @@
-# Simple OpenStack Setup with Custom Ansible Playbooks
+# Simple OpenStack Setup
 
 [![OpenStack](https://img.shields.io/badge/OpenStack-Yoga-red.svg)](https://docs.openstack.org/yoga/)
 [![Ansible](https://img.shields.io/badge/Ansible-4.0+-blue.svg)](https://ansible.com/)
-[![Ubuntu](https://img.shields.io/badge/Ubuntu-20.04-orange.svg)](https://ubuntu.com/)
+[![Ubuntu](https://img.shields.io/badge/Ubuntu-22.04-orange.svg)](https://ubuntu.com/)
 
 ## 🚀 Overview
-This is a **simplified OpenStack deployment** for learning and testing purposes using custom Ansible playbooks. Perfect for developers and students who want to understand OpenStack without the complexity of production deployments.
+**Simplified OpenStack deployment** for GCP VM with 24GB RAM and 200GB storage. Perfect for learning and testing OpenStack without production complexity.
 
 ### 🏗️ Architecture
 ```
-┌─────────────┐    ┌─────────────┐    ┌─────────────┐
-│ Controller  │    │   Storage   │    │   Compute   │
-│             │    │             │    │             │
-│ • Keystone  │    │ • Cinder    │    │ • Nova      │
-│ • Glance    │    │ • LVM       │    │ • Neutron   │
-│ • Nova API  │    │ • iSCSI     │    │ • libvirt   │
-│ • Neutron   │    │             │    │             │
-│ • Horizon   │    │             │    │             │
-│ • MySQL     │    │             │    │             │
-│ • RabbitMQ  │    │             │    │             │
-└─────────────┘    └─────────────┘    └─────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│                GCP VM Host (24GB RAM, 200GB)               │
+│                  (Ubuntu 22.04 LTS)                        │
+│                                                             │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐         │
+│  │ Controller  │  │   Storage   │  │   Compute   │         │
+│  │  6GB RAM    │  │  4GB RAM    │  │  8GB RAM    │         │
+│  │  3 vCPUs    │  │  2 vCPUs    │  │  4 vCPUs    │         │
+│  │  50GB disk  │  │  30GB disk  │  │  60GB disk  │         │
+│  │             │  │             │  │             │         │
+│  │ • Keystone  │  │ • Cinder    │  │ • Nova      │         │
+│  │ • Glance    │  │ • LVM       │  │ • Neutron   │         │
+│  │ • Nova API  │  │ • iSCSI     │  │ • libvirt   │         │
+│  │ • Neutron   │  │             │  │             │         │
+│  │ • Horizon   │  │             │  │             │         │
+│  │ • MySQL     │  │             │  │             │         │
+│  │ • RabbitMQ  │  │             │  │             │         │
+│  └─────────────┘  └─────────────┘  └─────────────┘         │
+└─────────────────────────────────────────────────────────────┘
 ```
 
 ## ✨ Features
-- 🎯 **Simple & Clean**: No complex OpenStack-Ansible overhead
-- 📚 **Educational**: Easy to understand each component
-- 🔧 **Modular**: Each service in separate playbook
-- 🎨 **Customizable**: Easy to modify for your needs
-- ✅ **Reliable**: Tested deployment sequence
-- 🧹 **Manageable**: Clear cleanup and validation scripts
+- 🎯 **Simple**: No complex configurations
+- 📚 **Educational**: Easy to understand
+- 🔧 **Optimized**: Perfect for 24GB GCP VM
+- 🎨 **Clean**: Plain text passwords
+- ✅ **Fast**: ~30 minute setup
+- 🧹 **Manageable**: Clear scripts
 
-## 📋 Prerequisites
-- **3 VMs** (Ubuntu 20.04 LTS recommended)
-- **Resources**: 4GB RAM, 20GB disk per VM
-- **Network**: All VMs connected with SSH access
-- **Virtualization**: KVM, VirtualBox, or Docker
-- **Host**: GCP VM or local machine
+## 📋 Quick Start
+
+### Option 1: Automated Setup
+```bash
+# On your GCP VM (Ubuntu 22.04)
+wget -O - https://raw.githubusercontent.com/Akrem-Alamine/openstack-simple/main/quick-setup.sh | bash
+```
+
+### Option 2: Manual Setup
+```bash
+# 1. Create GCP VM with nested virtualization
+gcloud compute instances create openstack-host \
+  --zone=us-east1-c \
+  --machine-type=n1-standard-8 \
+  --image-family=ubuntu-2204-lts \
+  --image-project=ubuntu-os-cloud \
+  --boot-disk-size=200GB \
+  --enable-nested-virtualization \
+  --tags=http-server,https-server
+
+# 2. SSH to GCP VM and run setup
+ssh username@YOUR-GCP-VM-IP
+git clone https://github.com/Akrem-Alamine/openstack-simple.git
+cd openstack-simple
+./quick-setup.sh
+
+# 3. Deploy OpenStack
+./scripts/deploy.sh
+```
 
 ## 🛠️ What Gets Installed
-| Node | Services |
-|------|----------|
-| **Controller** | Keystone, Glance, Nova API, Neutron Server, Horizon, MySQL, RabbitMQ |
-| **Storage** | Cinder Volume, LVM, iSCSI |
-| **Compute** | Nova Compute, Neutron Agent, libvirt |
+| Node | RAM | vCPUs | Disk | Services |
+|------|-----|-------|------|----------|
+| **Controller** | 6GB | 3 | 50GB | Keystone, Glance, Nova API, Neutron, Horizon, MySQL, RabbitMQ |
+| **Storage** | 4GB | 2 | 30GB | Cinder Volume, LVM, iSCSI |
+| **Compute** | 8GB | 4 | 60GB | Nova Compute, Neutron Agent, libvirt |
 
-## 📁 Directory Structure
+## � Default Credentials
+- **VM SSH**: ubuntu / ubuntu123
+- **OpenStack Admin**: admin / openstack123
+- **Database**: root / db_pass123
+
+## 🌐 Access Dashboard
+```bash
+# Get controller IP
+CONTROLLER_IP=$(virsh domifaddr controller | grep ipv4 | awk '{print $4}' | cut -d'/' -f1)
+
+# Create SSH tunnel from your local machine
+ssh -L 8080:$CONTROLLER_IP:80 username@YOUR-GCP-VM-IP
+
+# Open browser: http://localhost:8080/horizon
+# Login: admin / openstack123
 ```
-openstack-simple/
-├── 📄 README.md                          # This file
 ├── 📋 deployment-commands.md              # Detailed deployment guide
 ├── 🔧 ansible.cfg                        # Ansible configuration
 ├── 📂 inventory/

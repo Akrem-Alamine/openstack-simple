@@ -64,6 +64,19 @@ else
     echo "   ✗ Horizon not accessible"
 fi
 
+echo "7. Testing VM Creation Capability..."
+if openstack flavor list > /dev/null 2>&1 && openstack image list > /dev/null 2>&1; then
+    echo "   ✓ VM creation prerequisites available"
+    echo "   Flavors: $(openstack flavor list -f value | wc -l)"
+    echo "   Images: $(openstack image list -f value | wc -l)"
+else
+    echo "   ✗ VM creation prerequisites missing"
+fi
+
+echo "8. Testing Host Connectivity..."
+ping -c 2 192.168.122.20 > /dev/null 2>&1 && echo "   ✓ Storage node reachable" || echo "   ✗ Storage node unreachable"
+ping -c 2 192.168.122.30 > /dev/null 2>&1 && echo "   ✓ Compute node reachable" || echo "   ✗ Compute node unreachable"
+
 echo ""
 echo "Service Status Summary:"
 echo "======================="
@@ -100,10 +113,29 @@ echo "Images:"
 openstack image list
 
 echo ""
+echo "Networks:"
+openstack network list
+
+echo ""
+echo "System Information:"
+echo "=================="
+echo "Ubuntu Version: $(lsb_release -d | cut -f2)"
+echo "Kernel Version: $(uname -r)"
+echo "Uptime: $(uptime)"
+echo "Memory Usage: $(free -h | grep Mem:)"
+echo "Disk Usage: $(df -h / | tail -1)"
+
+echo ""
 echo "========================================"
 echo "Validation completed!"
 echo ""
 echo "Access Horizon at: http://$(hostname -I | awk '{print $1}')/horizon"
 echo "Username: admin"
 echo "Password: Check group_vars/all.yml"
+echo "Domain: Default"
+echo ""
+echo "VM IPs:"
+echo "Controller: 192.168.122.10"
+echo "Storage: 192.168.122.20"  
+echo "Compute: 192.168.122.30"
 echo "========================================"
