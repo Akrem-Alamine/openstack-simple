@@ -3,7 +3,8 @@
   hosts: openstack
   become: yes
   vars:
-    _openstack_release: "{{ openstack_release | default('zed') }}"
+    _openstack_release: "{{ openstack_release }}"
+  timezone: "Europe/Tunis"  # Added to avoid undefined 'timezone' error (fallback from group_vars or override with -e)
   pre_tasks:
     - name: Show chosen OpenStack release
       debug:
@@ -47,7 +48,7 @@
 
     - name: Set timezone
       timezone:
-        name: "{{ timezone }}"
+        name: "{{ timezone | default('Etc/UTC') }}"
 
     - name: Configure /etc/hosts
       lineinfile:
