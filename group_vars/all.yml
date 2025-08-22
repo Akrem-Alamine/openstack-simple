@@ -1,5 +1,5 @@
 # OpenStack Simple Configuration
-openstack_release: "yoga"
+openstack_release: "zed"  # Changed from 'yoga' per request (Jammy supports Xena or later; using newer 'zed')
 
 # Simple passwords
 admin_password: "openstack123"

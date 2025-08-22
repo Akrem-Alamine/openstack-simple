@@ -2,6 +2,12 @@
 - name: Prepare all nodes
   hosts: openstack
   become: yes
+  vars:
+    _openstack_release: "{{ openstack_release | default('zed') }}"
+  pre_tasks:
+    - name: Show chosen OpenStack release
+      debug:
+        msg: "Using release {{ _openstack_release }}"
   tasks:
     - name: Update package cache
       apt:
@@ -17,10 +23,21 @@
           - wget
         state: present
 
-    - name: Add OpenStack repository
-      apt_repository:
-        repo: "cloud-archive:{{ openstack_release }}"
+    - name: Ensure cloud keyring present
+      apt:
+        name: ubuntu-cloud-keyring
         state: present
+        update_cache: yes
+
+    - name: Add OpenStack repository (explicit deb line)
+      apt_repository:
+        repo: "deb http://ubuntu-cloud.archive.canonical.com/ubuntu {{ ansible_facts.lsb.codename }}-updates/{{ _openstack_release }} main"
+        filename: "cloud-archive-{{ _openstack_release }}"
+        state: present
+        update_cache: yes
+
+    - name: Apt update after adding cloud archive
+      apt:
         update_cache: yes
 
     - name: Install OpenStack client
