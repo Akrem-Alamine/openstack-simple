@@ -24,7 +24,7 @@
 │  │ • Nova API  │  │ • iSCSI     │  │ • libvirt   │         │
 │  │ • Neutron   │  │             │  │             │         │
 │  │ • Horizon   │  │             │  │             │         │
-│  │ • MySQL     │  │             │  │             │         │
+│  │ • PostgreSQL│  │             │  │             │         │
 │  │ • RabbitMQ  │  │             │  │             │         │
 │  └─────────────┘  └─────────────┘  └─────────────┘         │
 └─────────────────────────────────────────────────────────────┘
@@ -71,7 +71,7 @@ cd openstack-simple
 ## 🛠️ What Gets Installed
 | Node | RAM | vCPUs | Disk | Services |
 |------|-----|-------|------|----------|
-| **Controller** | 6GB | 3 | 50GB | Keystone, Glance, Nova API, Neutron, Horizon, MySQL, RabbitMQ |
+| **Controller** | 6GB | 3 | 50GB | Keystone, Glance, Nova API, Neutron, Horizon, PostgreSQL, RabbitMQ |
 | **Storage** | 4GB | 2 | 30GB | Cinder Volume, LVM, iSCSI |
 | **Compute** | 8GB | 4 | 60GB | Nova Compute, Neutron Agent, libvirt |
 
@@ -103,7 +103,7 @@ ssh -L 8080:$CONTROLLER_IP:80 username@YOUR-GCP-VM-IP
 ├── 📂 playbooks/                        # Ansible playbooks
 │   ├── site.yml                         # Main deployment
 │   ├── 00-prerequisites.yml             # System preparation
-│   ├── 01-database.yml                  # MySQL & RabbitMQ
+│   ├── 01-database.yml                  # PostgreSQL & RabbitMQ
 │   ├── 02-keystone.yml                  # Identity service
 │   ├── 03-glance.yml                    # Image service
 │   ├── 04-nova.yml                      # Compute service

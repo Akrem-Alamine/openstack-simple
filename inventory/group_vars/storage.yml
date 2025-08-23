@@ -4,8 +4,8 @@ services_to_install:
   - lvm2
   - thin-provisioning-tools
 
-# Cinder configuration
-cinder_database_connection: "mysql+pymysql://cinder:{{ cinder_db_password }}@{{ controller_ip }}/cinder"
+# Cinder configuration (PostgreSQL)
+cinder_database_connection: "postgresql+psycopg2://cinder:{{ cinder_db_password }}@{{ controller_ip }}/cinder"
 
 # LVM configuration
 volume_group: "cinder-volumes"

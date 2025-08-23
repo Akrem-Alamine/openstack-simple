@@ -52,7 +52,7 @@ ssh -L 8080:$CONTROLLER_IP:80 username@YOUR-GCP-VM-IP
 ## Default Passwords (Simple!)
 - **VM SSH**: ubuntu / ubuntu123
 - **OpenStack Admin**: admin / openstack123
-- **MySQL root**: db_pass123
+- **PostgreSQL**: (local peer auth for 'postgres', service DB user passwords stored in group_vars)
 
 ## Quick Commands
 ```bash
@@ -83,7 +83,7 @@ openstack service list
 ## Architecture
 ```
 GCP VM Host (24GB RAM, 200GB SSD)
-├── Controller VM (6GB RAM) - Keystone, Glance, Nova API, Neutron, Horizon, MySQL
+├── Controller VM (6GB RAM) - Keystone, Glance, Nova API, Neutron, Horizon, PostgreSQL
 ├── Storage VM (4GB RAM)    - Cinder, LVM, iSCSI
 └── Compute VM (8GB RAM)    - Nova Compute, Neutron Agent, libvirt
 ```

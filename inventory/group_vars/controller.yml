@@ -1,6 +1,8 @@
 # Controller node specific variables
+# Switched from MySQL to PostgreSQL
 services_to_install:
-  - mysql-server
+  - postgresql
+  - postgresql-contrib
   - rabbitmq-server
   - keystone
   - glance
@@ -11,20 +13,18 @@ services_to_install:
   - neutron-plugin-ml2
   - horizon
 
-# Database configuration
-mysql_root_password: "{{ database_password }}"
-mysql_bind_address: "{{ controller_ip }}"
+# PostgreSQL uses peer auth for local 'postgres' superuser; no root password variable needed.
 
 # Keystone configuration
-keystone_database_connection: "mysql+pymysql://keystone:{{ keystone_db_password }}@{{ controller_ip }}/keystone"
+keystone_database_connection: "postgresql+psycopg2://keystone:{{ keystone_db_password }}@{{ controller_ip }}/keystone"
 
 # Glance configuration
-glance_database_connection: "mysql+pymysql://glance:{{ glance_db_password }}@{{ controller_ip }}/glance"
+glance_database_connection: "postgresql+psycopg2://glance:{{ glance_db_password }}@{{ controller_ip }}/glance"
 
 # Nova configuration
-nova_database_connection: "mysql+pymysql://nova:{{ nova_db_password }}@{{ controller_ip }}/nova"
-nova_api_database_connection: "mysql+pymysql://nova:{{ nova_db_password }}@{{ controller_ip }}/nova_api"
-nova_cell0_database_connection: "mysql+pymysql://nova:{{ nova_db_password }}@{{ controller_ip }}/nova_cell0"
+nova_database_connection: "postgresql+psycopg2://nova:{{ nova_db_password }}@{{ controller_ip }}/nova"
+nova_api_database_connection: "postgresql+psycopg2://nova:{{ nova_db_password }}@{{ controller_ip }}/nova_api"
+nova_cell0_database_connection: "postgresql+psycopg2://nova:{{ nova_db_password }}@{{ controller_ip }}/nova_cell0"
 
 # Neutron configuration
-neutron_database_connection: "mysql+pymysql://neutron:{{ neutron_db_password }}@{{ controller_ip }}/neutron"
+neutron_database_connection: "postgresql+psycopg2://neutron:{{ neutron_db_password }}@{{ controller_ip }}/neutron"

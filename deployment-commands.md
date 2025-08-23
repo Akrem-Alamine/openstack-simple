@@ -164,7 +164,7 @@ ansible-playbook -i inventory/hosts playbooks/01-database.yml --private-key ~/.s
 tail -f /var/log/ansible.log
 
 # Or check specific services:
-ansible controller -i inventory/hosts -m shell -a "systemctl status mysql" --private-key ~/.ssh/openstack_key
+ansible controller -i inventory/hosts -m shell -a "systemctl status postgresql" --private-key ~/.ssh/openstack_key
 ansible controller -i inventory/hosts -m shell -a "systemctl status apache2" --private-key ~/.ssh/openstack_key
 ```
 

@@ -1,90 +1,80 @@
 ---
-- name: Install and configure database
+- name: Install and configure OpenStack database (PostgreSQL) and RabbitMQ
   hosts: controller
   become: yes
+  vars:
+    controller_ip: "192.168.122.10"
+    keystone_db_password: "ChangeMeKeystone123"
+    glance_db_password: "ChangeMeGlance123"
+    nova_db_password: "ChangeMeNova123"
+    neutron_db_password: "ChangeMeNeutron123"
+    cinder_db_password: "ChangeMeCinder123"
+    rabbit_password: "ChangeMeRabbit123"
+    # List of OpenStack service DB users & passwords
+    openstack_db_users:
+      - { name: keystone, password: "{{ keystone_db_password }}" }
+      - { name: glance,   password: "{{ glance_db_password }}" }
+      - { name: nova,     password: "{{ nova_db_password }}" }
+      - { name: neutron,  password: "{{ neutron_db_password }}" }
+      - { name: cinder,   password: "{{ cinder_db_password }}" }
+    # Databases to create (map to owners). Nova uses multiple DBs.
+    openstack_databases:
+      - { name: keystone,   owner: keystone }
+      - { name: glance,     owner: glance }
+      - { name: nova,       owner: nova }
+      - { name: nova_api,   owner: nova }
+      - { name: nova_cell0, owner: nova }
+      - { name: neutron,    owner: neutron }
+      - { name: cinder,     owner: cinder }
+
   tasks:
-    - name: Install MySQL server
+    - name: Install PostgreSQL server and dependencies
       apt:
-        name: 
-          - mysql-server
-          - python3-pymysql
+        name:
+          - postgresql
+          - postgresql-contrib
+          - python3-psycopg2
         state: present
+        update_cache: yes
 
-    - name: Configure MySQL bind address
-      lineinfile:
-        path: /etc/mysql/mysql.conf.d/mysqld.cnf
-        regexp: '^bind-address'
-        line: "bind-address = {{ controller_ip }}"
-        backup: yes
-      notify: restart mysql
-
-    - name: Start and enable MySQL
+    - name: Ensure PostgreSQL is started and enabled
       systemd:
-        name: mysql
+        name: postgresql
         state: started
         enabled: yes
 
-    - name: Set MySQL root password
-      mysql_user:
-        name: root
-        password: "{{ mysql_root_password }}"
-        login_unix_socket: /var/run/mysqld/mysqld.sock
-        state: present
-
-    - name: Create MySQL configuration file
-      template:
-        content: |
-          [client]
-          user=root
-          password={{ mysql_root_password }}
-        dest: /root/.my.cnf
-        mode: '0600'
-
-    - name: Create OpenStack databases
-      mysql_db:
-        name: "{{ item }}"
-        state: present
-        login_user: root
-        login_password: "{{ mysql_root_password }}"
-      loop:
-        - keystone
-        - glance
-        - nova
-        - nova_api
-        - nova_cell0
-        - neutron
-        - cinder
-
-    - name: Create database users
-      mysql_user:
+    - name: Ensure service users (roles) exist
+      become_user: postgres
+      postgresql_user:
         name: "{{ item.name }}"
         password: "{{ item.password }}"
-        priv: "{{ item.db }}.*:ALL"
-        host: "%"
+        role_attr_flags: LOGIN
         state: present
-        login_user: root
-        login_password: "{{ mysql_root_password }}"
-      loop:
-        - { name: "keystone", password: "{{ keystone_db_password }}", db: "keystone" }
-        - { name: "glance", password: "{{ glance_db_password }}", db: "glance" }
-        - { name: "nova", password: "{{ nova_db_password }}", db: "nova" }
-        - { name: "nova", password: "{{ nova_db_password }}", db: "nova_api" }
-        - { name: "nova", password: "{{ nova_db_password }}", db: "nova_cell0" }
-        - { name: "neutron", password: "{{ neutron_db_password }}", db: "neutron" }
-        - { name: "cinder", password: "{{ cinder_db_password }}", db: "cinder" }
+      loop: "{{ openstack_db_users }}"
 
-    - name: Install RabbitMQ
+    - name: Create OpenStack PostgreSQL databases with correct owners
+      become_user: postgres
+      postgresql_db:
+        name: "{{ item.name }}"
+        owner: "{{ item.owner }}"
+        encoding: UTF8
+        state: present
+      loop: "{{ openstack_databases }}"
+
+    # RabbitMQ remains unchanged
+    - name: Install RabbitMQ server
       apt:
         name: rabbitmq-server
         state: present
+        update_cache: yes
 
-    - name: Start and enable RabbitMQ
+    - name: Ensure RabbitMQ is started and enabled
       systemd:
         name: rabbitmq-server
         state: started
         enabled: yes
 
-    - name: Create RabbitMQ user
+    - name: Create RabbitMQ user for OpenStack
       rabbitmq_user:
         user: openstack
         password: "{{ rabbit_password }}"
@@ -95,8 +85,4 @@
             write_priv: .*
         state: present
 
-  handlers:
-    - name: restart mysql
-      systemd:
-        name: mysql
-        state: restarted
+  handlers: []

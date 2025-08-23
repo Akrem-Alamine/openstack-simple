@@ -4,11 +4,11 @@ services_to_install:
   - neutron-linuxbridge-agent
   - qemu-guest-agent
 
-# Nova configuration
-nova_database_connection: "mysql+pymysql://nova:{{ nova_db_password }}@{{ controller_ip }}/nova"
+# Nova configuration (PostgreSQL)
+nova_database_connection: "postgresql+psycopg2://nova:{{ nova_db_password }}@{{ controller_ip }}/nova"
 
-# Neutron configuration
-neutron_database_connection: "mysql+pymysql://neutron:{{ neutron_db_password }}@{{ controller_ip }}/neutron"
+# Neutron configuration (PostgreSQL)
+neutron_database_connection: "postgresql+psycopg2://neutron:{{ neutron_db_password }}@{{ controller_ip }}/neutron"
 
 # Hypervisor configuration - optimized for Ubuntu 22.04
 virt_type: "kvm"  # Use KVM with Ubuntu 22.04 cloud images
