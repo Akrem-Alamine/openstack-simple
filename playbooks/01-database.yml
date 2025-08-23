@@ -1,15 +1,21 @@
 ---
 - name: Install and configure OpenStack database (PostgreSQL) and RabbitMQ
-  hosts: controller
-  become: yes
+  hosts: all
+  become: true
+  gather_facts: yes
   vars:
     controller_ip: "192.168.122.10"
+
+    # Service DB user passwords (vault these in production)
     keystone_db_password: "ChangeMeKeystone123"
-    glance_db_password: "ChangeMeGlance123"
-    nova_db_password: "ChangeMeNova123"
-    neutron_db_password: "ChangeMeNeutron123"
-    cinder_db_password: "ChangeMeCinder123"
+    glance_db_password:   "ChangeMeGlance123"
+    nova_db_password:     "ChangeMeNova123"
+    neutron_db_password:  "ChangeMeNeutron123"
+    cinder_db_password:   "ChangeMeCinder123"
+
     rabbit_password: "ChangeMeRabbit123"
+    postgres_admin_password: "ChangeMePostgresAdmin123"
+
     # List of OpenStack service DB users & passwords
     openstack_db_users:
       - { name: keystone, password: "{{ keystone_db_password }}" }
@@ -17,7 +23,8 @@
       - { name: nova,     password: "{{ nova_db_password }}" }
       - { name: neutron,  password: "{{ neutron_db_password }}" }
       - { name: cinder,   password: "{{ cinder_db_password }}" }
-    # Databases to create (map to owners). Nova uses multiple DBs.
+
+    # Databases to create (Nova needs extra DBs)
     openstack_databases:
       - { name: keystone,   owner: keystone }
       - { name: glance,     owner: glance }
@@ -27,7 +34,16 @@
       - { name: neutron,    owner: neutron }
       - { name: cinder,     owner: cinder }
 
-  tasks:
+    # Allow override of pg_hba.conf path (auto-detected if empty)
+    pg_hba_conf: ""
+
+  pre_tasks:
+    - name: Ensure Ansible remote tmp dir exists (avoid become_user chown issues)
+      file:
+        path: /tmp/.ansible/tmp
+        state: directory
+        mode: '1777'
+
     - name: Install PostgreSQL server and dependencies
       apt:
         name:
@@ -37,31 +53,82 @@
         state: present
         update_cache: yes
 
+    - name: Detect PostgreSQL major version directory
+      shell: "ls -1 /etc/postgresql | grep -E '^[0-9]+$' | sort -nr | head -1"
+      register: pg_version_dir
+      changed_when: false
+
+    - name: Set pg_hba_conf path dynamically (fallback to 14)
+      set_fact:
+        pg_hba_conf: "{{ '/etc/postgresql/' + (pg_version_dir.stdout | default('14')) + '/main/pg_hba.conf' }}"
+      when: pg_hba_conf | length == 0
+
+    - name: Ensure postgres superuser password is set (first run)
+      command: >
+        psql -U postgres -c "ALTER USER postgres WITH PASSWORD '{{ postgres_admin_password }}';"
+      changed_when: false
+      no_log: true
+
+    - name: Ensure listen_addresses includes localhost
+      lineinfile:
+        path: "{{ pg_hba_conf | dirname }}/postgresql.conf"
+        regexp: "^#?listen_addresses\\s*="
+        line: "listen_addresses = 'localhost'"
+      notify: Restart PostgreSQL
+
+  tasks:
+    - name: Adjust pg_hba.conf to md5 for IPv4 localhost
+      lineinfile:
+        path: "{{ pg_hba_conf }}"
+        regexp: '^host\s+all\s+all\s+127\.0\.0\.1/32\s+'
+        line: 'host    all             all             127.0.0.1/32            md5'
+        backrefs: yes
+      notify: Restart PostgreSQL
+
+    - name: Adjust pg_hba.conf to md5 for IPv6 localhost
+      lineinfile:
+        path: "{{ pg_hba_conf }}"
+        regexp: '^host\s+all\s+all\s+::1/128\s+'
+        line: 'host    all             all             ::1/128                 md5'
+        backrefs: yes
+      notify: Restart PostgreSQL
+
     - name: Ensure PostgreSQL is started and enabled
       systemd:
         name: postgresql
         state: started
         enabled: yes
 
+    - name: Wait for PostgreSQL to accept TCP connections
+      wait_for:
+        host: 127.0.0.1
+        port: 5432
+        delay: 1
+        timeout: 30
+
     - name: Ensure service users (roles) exist
-      become_user: postgres
       postgresql_user:
         name: "{{ item.name }}"
         password: "{{ item.password }}"
         role_attr_flags: LOGIN
         state: present
+        login_host: 127.0.0.1
+        login_user: postgres
+        login_password: "{{ postgres_admin_password }}"
       loop: "{{ openstack_db_users }}"
+      no_log: true
 
     - name: Create OpenStack PostgreSQL databases with correct owners
-      become_user: postgres
       postgresql_db:
         name: "{{ item.name }}"
         owner: "{{ item.owner }}"
         encoding: UTF8
         state: present
+        login_host: 127.0.0.1
+        login_user: postgres
+        login_password: "{{ postgres_admin_password }}"
       loop: "{{ openstack_databases }}"
 
-    # RabbitMQ remains unchanged
     - name: Install RabbitMQ server
       apt:
         name: rabbitmq-server
@@ -84,5 +151,10 @@
             read_priv: .*
             write_priv: .*
         state: present
+      no_log: true
 
-  handlers: []
+  handlers:
+    - name: Restart PostgreSQL
+      systemd:
+        name: postgresql
+        state: restarted

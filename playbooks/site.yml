@@ -1,6 +1,5 @@
 ---
 - name: Deploy Simple OpenStack
-  hosts: localhost
   gather_facts: false
   tasks:
     - name: Display deployment start message

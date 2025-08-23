@@ -2,19 +2,57 @@
 - name: Install and configure Keystone
   hosts: controller
   become: yes
+  vars:
+    # Expect these to be defined in inventory/group_vars
+    # mysql_root_password: "rootpass"
+    # keystone_db_name: "keystone"
+    # keystone_db_user: "keystone"
+    # keystone_db_password: "change_me"
   tasks:
-    - name: Install Keystone
+    - name: Set default Keystone DB vars if undefined
+      set_fact:
+        keystone_db_name: "{{ keystone_db_name | default('keystone') }}"
+        keystone_db_user: "{{ keystone_db_user | default('keystone') }}"
+        keystone_db_password: "{{ keystone_db_password | default('ChangeMeKeystone!') }}"
+
+    - name: Warn if default Keystone DB password is in use
+      debug:
+        msg: "WARNING: Using default Keystone DB password (ChangeMeKeystone!). Override keystone_db_password in group_vars/inventory."
+      when: keystone_db_password == 'ChangeMeKeystone!'
+
+    - name: Install Keystone and dependencies
       apt:
-        name: keystone
+        update_cache: yes
+        name:
+          - keystone
+          - apache2
+          - libapache2-mod-wsgi-py3
+          - python3-pymysql
         state: present
 
-    - name: Configure Keystone database
+    - name: Ensure Keystone database exists
+      mysql_db:
+        name: "{{ keystone_db_name }}"
+        state: present
+        login_unix_socket: /var/run/mysqld/mysqld.sock
+
+    - name: Ensure Keystone database user exists
+      mysql_user:
+        name: "{{ keystone_db_user }}"
+        password: "{{ keystone_db_password }}"
+        host: "%"
+        priv: "{{ keystone_db_name }}.*:ALL"
+        state: present
+        login_unix_socket: /var/run/mysqld/mysqld.sock
+
+    - name: Configure Keystone database connection
       ini_file:
         path: /etc/keystone/keystone.conf
         section: database
         option: connection
-        value: "{{ keystone_database_connection }}"
+        value: "mysql+pymysql://keystone:ChangeMeKeystone!@127.0.0.1/keystone"
         backup: yes
+      notify: Restart Apache
 
     - name: Configure Keystone token provider
       ini_file:
@@ -22,15 +60,23 @@
         section: token
         option: provider
         value: fernet
+      notify: Restart Apache
 
-    - name: Populate Keystone database
-      shell: keystone-manage db_sync
+    - name: Populate Keystone database (with retries)
+      command: keystone-manage db_sync
       become_user: keystone
+      register: db_sync_result
+      retries: 3
+      delay: 5
+      until: db_sync_result.rc == 0
+      changed_when: db_sync_result.rc == 0
+      failed_when: db_sync_result.rc != 0
 
     - name: Initialize Fernet key repositories
       shell: |
         keystone-manage fernet_setup --keystone-user keystone --keystone-group keystone
         keystone-manage credential_setup --keystone-user keystone --keystone-group keystone
+      become_user: keystone
 
     - name: Bootstrap Keystone
       shell: |
@@ -40,12 +86,14 @@
           --bootstrap-internal-url http://{{ controller_ip }}:5000/v3/ \
           --bootstrap-public-url http://{{ controller_ip }}:5000/v3/ \
           --bootstrap-region-id RegionOne
+      when: db_sync_result.rc == 0
 
     - name: Configure Apache ServerName
       lineinfile:
         path: /etc/apache2/apache2.conf
         line: "ServerName {{ controller_ip }}"
         state: present
+      notify: Restart Apache
 
     - name: Start and enable Apache
       systemd:
@@ -73,9 +121,16 @@
         openstack project create --domain default --description "Service Project" service
       args:
         creates: /tmp/service_project_created
+        executable: /bin/bash
 
     - name: Mark service project as created
       file:
         path: /tmp/service_project_created
         state: touch
         mode: '0644'
+
+  handlers:
+    - name: Restart Apache
+      systemd:
+        name: apache2
+        state: restarted

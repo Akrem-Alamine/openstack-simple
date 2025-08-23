@@ -1,10 +1,11 @@
 ---
 - name: Prepare all nodes
-  hosts: openstack
+  hosts: all
   become: yes
+  gather_facts: yes
   vars:
     _openstack_release: "{{ openstack_release }}"
-  timezone: "Europe/Tunis"  # Added to avoid undefined 'timezone' error (fallback from group_vars or override with -e)
+    timezone: "Africa/Tunis"  # Added to avoid undefined 'timezone' error (fallback from group_vars or override with -e)
   pre_tasks:
     - name: Show chosen OpenStack release
       debug:

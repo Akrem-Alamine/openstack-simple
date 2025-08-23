@@ -11,3 +11,7 @@ storage ansible_host=192.168.122.12 ansible_user=ubuntu
 controller
 storage
 compute
+
+[all:vars]
+ansible_become=true
+ansible_become_method=sudo
