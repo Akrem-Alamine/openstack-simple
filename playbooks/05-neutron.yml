@@ -2,6 +2,11 @@
 - name: Install and configure Neutron (Controller)
   hosts: controller
   become: yes
+  vars:
+    neutron_user_created: /tmp/neutron_user_created
+    neutron_service_created: /tmp/neutron_service_created
+    neutron_endpoints_created: /tmp/neutron_endpoints_created
+
   tasks:
     - name: Install Neutron packages
       apt:
@@ -12,34 +17,45 @@
           - neutron-dhcp-agent
           - neutron-metadata-agent
         state: present
+        update_cache: yes
 
     - name: Create neutron user
       shell: |
-        source /root/admin-openrc
-        openstack user create --domain default --password {{ neutron_password }} neutron
+        . /root/admin-openrc
+        openstack user show neutron || openstack user create --domain default --password {{ neutron_password }} neutron
       args:
-        creates: /tmp/neutron_user_created
+        executable: /bin/bash
 
     - name: Add admin role to neutron user
       shell: |
-        source /root/admin-openrc
+        . /root/admin-openrc
+        openstack role assignment list --project service --user neutron | grep admin || \
         openstack role add --project service --user neutron admin
+      args:
+        executable: /bin/bash
 
     - name: Create neutron service
       shell: |
-        source /root/admin-openrc
+        . /root/admin-openrc
         openstack service create --name neutron --description "OpenStack Networking" network
       args:
-        creates: /tmp/neutron_service_created
+        creates: "{{ neutron_service_created }}"
+        executable: /bin/bash
 
     - name: Create neutron endpoints
       shell: |
         source /root/admin-openrc
-        openstack endpoint create --region RegionOne network public http://{{ controller_ip }}:9696
-        openstack endpoint create --region RegionOne network internal http://{{ controller_ip }}:9696
-        openstack endpoint create --region RegionOne network admin http://{{ controller_ip }}:9696
+        # Get the neutron service ID (pick the first one if multiple exist)
+        SERVICE_ID=$(openstack service list -f value -c ID -c Name | awk '$2=="neutron"{print $1; exit}')
+
+        # Create endpoints only if they do not already exist
+        openstack endpoint show $SERVICE_ID public  || openstack endpoint create --region RegionOne $SERVICE_ID public  http://{{ controller_ip }}:9696
+        openstack endpoint show $SERVICE_ID internal || openstack endpoint create --region RegionOne $SERVICE_ID internal http://{{ controller_ip }}:9696
+        openstack endpoint show $SERVICE_ID admin    || openstack endpoint create --region RegionOne $SERVICE_ID admin    http://{{ controller_ip }}:9696
       args:
-        creates: /tmp/neutron_endpoints_created
+        executable: /bin/bash
+
+
 
     - name: Configure Neutron database
       ini_file:
@@ -63,7 +79,7 @@
         - { option: "notify_nova_on_port_status_changes", value: "true" }
         - { option: "notify_nova_on_port_data_changes", value: "true" }
 
-    - name: Configure Neutron keystone authentication
+    - name: Configure Neutron Keystone authentication
       ini_file:
         path: /etc/neutron/neutron.conf
         section: keystone_authtoken
@@ -122,15 +138,15 @@
         - neutron-dhcp-agent
         - neutron-metadata-agent
 
-    - name: Mark neutron services as created
+    - name: Mark neutron tasks as created
       file:
         path: "{{ item }}"
         state: touch
         mode: '0644'
       loop:
-        - /tmp/neutron_user_created
-        - /tmp/neutron_service_created
-        - /tmp/neutron_endpoints_created
+        - "{{ neutron_user_created }}"
+        - "{{ neutron_service_created }}"
+        - "{{ neutron_endpoints_created }}"
 
 - name: Install and configure Neutron (Compute)
   hosts: compute
@@ -140,6 +156,7 @@
       apt:
         name: neutron-linuxbridge-agent
         state: present
+        update_cache: yes
 
     - name: Configure Neutron agent
       ini_file:
