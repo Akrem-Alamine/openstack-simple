@@ -108,9 +108,9 @@
         openstack image create "cirros" \
           --file /tmp/cirros-0.6.2-x86_64-disk.img \
           --disk-format qcow2 --container-format bare \
-          --public
       args:
         creates: /tmp/cirros_image_created
+        executable: /bin/bash
 
     - name: Create default flavors for testing
       shell: |
