@@ -2,6 +2,8 @@
 - name: Install and configure Cinder (Controller)
   hosts: controller
   become: yes
+  vars:
+    cinder_database_connection: "mysql+pymysql://cinder:{{ cinder_db_password }}@{{ controller_ip }}/cinder"
   tasks:
     - name: Install Cinder packages
       apt:
@@ -9,38 +11,56 @@
           - cinder-api
           - cinder-scheduler
         state: present
+        update_cache: yes
 
-    - name: Create cinder user
+    - name: Create Cinder user (if not exists)
       shell: |
         source /root/admin-openrc
+        openstack user show cinder >/dev/null 2>&1 || \
         openstack user create --domain default --password {{ cinder_password }} cinder
       args:
-        creates: /tmp/cinder_user_created
+        executable: /bin/bash
 
-    - name: Add admin role to cinder user
+    - name: Add admin role to Cinder user (if not already added)
       shell: |
         source /root/admin-openrc
+        openstack role assignment list --project service --user cinder | grep admin >/dev/null 2>&1 || \
         openstack role add --project service --user cinder admin
+      args:
+        executable: /bin/bash
 
-    - name: Create cinder services
+    - name: Create Cinder services (if not exist)
       shell: |
         source /root/admin-openrc
+        openstack service show cinderv2 >/dev/null 2>&1 || \
         openstack service create --name cinderv2 --description "OpenStack Block Storage" volumev2
+        openstack service show cinderv3 >/dev/null 2>&1 || \
         openstack service create --name cinderv3 --description "OpenStack Block Storage" volumev3
       args:
-        creates: /tmp/cinder_service_created
+        executable: /bin/bash
 
-    - name: Create cinder endpoints
+    - name: Create Cinder endpoints (if not exist)
       shell: |
         source /root/admin-openrc
-        openstack endpoint create --region RegionOne volumev2 public http://{{ controller_ip }}:8776/v2/%\(project_id\)s
-        openstack endpoint create --region RegionOne volumev2 internal http://{{ controller_ip }}:8776/v2/%\(project_id\)s
-        openstack endpoint create --region RegionOne volumev2 admin http://{{ controller_ip }}:8776/v2/%\(project_id\)s
-        openstack endpoint create --region RegionOne volumev3 public http://{{ controller_ip }}:8776/v3/%\(project_id\)s
-        openstack endpoint create --region RegionOne volumev3 internal http://{{ controller_ip }}:8776/v3/%\(project_id\)s
-        openstack endpoint create --region RegionOne volumev3 admin http://{{ controller_ip }}:8776/v3/%\(project_id\)s
+        V2_ID=$(openstack service list -f value -c ID -c Name | awk '$2=="cinderv2"{print $1}')
+        V3_ID=$(openstack service list -f value -c ID -c Name | awk '$2=="cinderv3"{print $1}')
+
+        openstack endpoint show $V2_ID public >/dev/null 2>&1 || \
+          openstack endpoint create --region RegionOne $V2_ID public 'http://{{ controller_ip }}:8776/v2/%(project_id)s'
+        openstack endpoint show $V2_ID internal >/dev/null 2>&1 || \
+          openstack endpoint create --region RegionOne $V2_ID internal 'http://{{ controller_ip }}:8776/v2/%(project_id)s'
+        openstack endpoint show $V2_ID admin >/dev/null 2>&1 || \
+          openstack endpoint create --region RegionOne $V2_ID admin 'http://{{ controller_ip }}:8776/v2/%(project_id)s'
+
+        openstack endpoint show $V3_ID public >/dev/null 2>&1 || \
+          openstack endpoint create --region RegionOne $V3_ID public 'http://{{ controller_ip }}:8776/v3/%(project_id)s'
+        openstack endpoint show $V3_ID internal >/dev/null 2>&1 || \
+          openstack endpoint create --region RegionOne $V3_ID internal 'http://{{ controller_ip }}:8776/v3/%(project_id)s'
+        openstack endpoint show $V3_ID admin >/dev/null 2>&1 || \
+          openstack endpoint create --region RegionOne $V3_ID admin 'http://{{ controller_ip }}:8776/v3/%(project_id)s'
       args:
-        creates: /tmp/cinder_endpoints_created
+        executable: /bin/bash
+
 
     - name: Configure Cinder database
       ini_file:
@@ -61,7 +81,7 @@
         - { option: "auth_strategy", value: "keystone" }
         - { option: "my_ip", value: "{{ controller_ip }}" }
 
-    - name: Configure Cinder keystone authentication
+    - name: Configure Cinder Keystone authentication
       ini_file:
         path: /etc/cinder/cinder.conf
         section: keystone_authtoken
@@ -89,17 +109,9 @@
         enabled: yes
       loop:
         - cinder-scheduler
+        - cinder-api
         - apache2
-
-    - name: Mark cinder services as created
-      file:
-        path: "{{ item }}"
-        state: touch
-        mode: '0644'
-      loop:
-        - /tmp/cinder_user_created
-        - /tmp/cinder_service_created
-        - /tmp/cinder_endpoints_created
+      when: ansible_facts.packages['cinder-api'] is defined
 
 - name: Install and configure Cinder Volume (Storage)
   hosts: storage
@@ -111,15 +123,21 @@
           - cinder-volume
           - lvm2
           - thin-provisioning-tools
+          - tgt
         state: present
+        update_cache: yes
 
-    - name: Create physical volume (if device exists)
-      shell: pvcreate {{ volume_device }}
-      ignore_errors: yes
+    - name: Create physical volume (if not exists)
+      shell: |
+        pvdisplay {{ volume_device }} >/dev/null 2>&1 || pvcreate {{ volume_device }}
+      args:
+        executable: /bin/bash
 
-    - name: Create volume group
-      shell: vgcreate {{ volume_group }} {{ volume_device }}
-      ignore_errors: yes
+    - name: Create volume group (if not exists)
+      shell: |
+        vgdisplay {{ volume_group }} >/dev/null 2>&1 || vgcreate {{ volume_group }} {{ volume_device }}
+      args:
+        executable: /bin/bash
 
     - name: Configure Cinder Volume database
       ini_file:
@@ -142,7 +160,7 @@
         - { option: "enabled_backends", value: "lvm" }
         - { option: "glance_api_servers", value: "http://{{ controller_ip }}:9292" }
 
-    - name: Configure Cinder Volume keystone authentication
+    - name: Configure Cinder Volume Keystone authentication
       ini_file:
         path: /etc/cinder/cinder.conf
         section: keystone_authtoken
