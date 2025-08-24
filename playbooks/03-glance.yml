@@ -7,34 +7,56 @@
       apt:
         name: glance
         state: present
+    - name: Check if glance user exists
+      shell: |
+        . /root/admin-openrc
+        openstack user show glance
+      args:
+        executable: /bin/bash
+      register: glance_user
+      ignore_errors: true
 
     - name: Create glance user
       shell: |
-        source /root/admin-openrc
+        . /root/admin-openrc
         openstack user create --domain default --password {{ glance_password }} glance
       args:
-        creates: /tmp/glance_user_created
+        executable: /bin/bash
+      when: glance_user.rc != 0
 
     - name: Add admin role to glance user
-      shell: |
-        source /root/admin-openrc
-        openstack role add --project service --user glance admin
+      openstack.cloud.role_assignment:
+        user: glance
+        role: admin
+        project: service
+        state: present
+      environment:
+        OS_AUTH_URL: "http://controller:5000/v3"
+        OS_USERNAME: "admin"
+        OS_PASSWORD: "{{ admin_password }}"
+        OS_PROJECT_NAME: "admin"
+        OS_USER_DOMAIN_NAME: "Default"
+        OS_PROJECT_DOMAIN_NAME: "Default"
 
     - name: Create glance service
       shell: |
-        source /root/admin-openrc
+        . /root/admin-openrc
         openstack service create --name glance --description "OpenStack Image" image
+        touch /tmp/glance_service_created
       args:
         creates: /tmp/glance_service_created
+        executable: /bin/bash
 
     - name: Create glance endpoints
       shell: |
-        source /root/admin-openrc
+        . /root/admin-openrc
         openstack endpoint create --region RegionOne image public http://{{ controller_ip }}:9292
         openstack endpoint create --region RegionOne image internal http://{{ controller_ip }}:9292
         openstack endpoint create --region RegionOne image admin http://{{ controller_ip }}:9292
+        touch /tmp/glance_endpoints_created
       args:
         creates: /tmp/glance_endpoints_created
+        executable: /bin/bash
 
     - name: Configure Glance API database
       ini_file:
@@ -79,9 +101,15 @@
         - { option: "default_store", value: "file" }
         - { option: "filesystem_store_datadir", value: "/var/lib/glance/images/" }
 
-    - name: Populate Glance database
-      shell: glance-manage db_sync
+    - name: Populate Glance database (with retries)
+      command: glance-manage db_sync
       become_user: glance
+      register: db_sync_result
+      retries: 3
+      delay: 10
+      until: db_sync_result.rc == 0
+      changed_when: db_sync_result.rc == 0
+      failed_when: db_sync_result.rc != 0
 
     - name: Start and enable Glance API
       systemd:

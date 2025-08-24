@@ -20,6 +20,44 @@ nova_password: "nova_pass123"
 neutron_password: "neutron_pass123"
 cinder_password: "cinder_pass123"
 
+# OpenStack database users
+openstack_db_users:
+  - name: keystone
+    password: "{{ keystone_db_password }}"
+  - name: glance
+    password: "{{ glance_db_password }}"
+  - name: nova
+    password: "{{ nova_db_password }}"
+  - name: neutron
+    password: "{{ neutron_db_password }}"
+  - name: cinder
+    password: "{{ cinder_db_password }}"
+
+# OpenStack PostgreSQL databases and owners
+openstack_databases:
+  - name: keystone
+    owner: keystone
+  - name: glance
+    owner: glance
+  - name: nova
+    owner: nova
+  - name: nova_api
+    owner: nova
+  - name: nova_cell0
+    owner: nova
+  - name: neutron
+    owner: neutron
+  - name: cinder
+    owner: cinder
+
+# PostgreSQL superuser password
+postgres_admin_password: "db_pass123"
+
+# RabbitMQ user/password for OpenStack
+rabbit_user: "openstack"
+rabbit_password: "rabbit_pass123"  # literal, not templated
+transport_url: "rabbit://{{ rabbit_user }}:{{ rabbit_password }}@{{ controller_ip }}:5672/"
+
 # Network interface (usually first interface in Ubuntu VMs)
 management_interface: "enp1s0"
 provider_interface: "enp1s0"
@@ -30,7 +68,7 @@ compute_ip: "192.168.122.11"
 storage_ip: "192.168.122.12"
 
 # Connection strings
-transport_url: "rabbit://openstack:{{ rabbit_password }}@{{ controller_ip }}:5672/"
+transport_url: "rabbit://{{ rabbit_user }}:{{ rabbit_password }}@{{ controller_ip }}:5672/"
 auth_url: "http://{{ controller_ip }}:5000/v3"
 
 # Admin credentials

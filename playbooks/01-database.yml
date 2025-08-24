@@ -1,49 +1,12 @@
 ---
-- name: Install and configure OpenStack database (PostgreSQL) and RabbitMQ
-  hosts: all
+- name: Install and configure PostgreSQL & RabbitMQ (controller only)
+  hosts: controller
   become: true
   gather_facts: yes
   vars:
-    controller_ip: "192.168.122.10"
-
-    # Service DB user passwords (vault these in production)
-    keystone_db_password: "ChangeMeKeystone123"
-    glance_db_password:   "ChangeMeGlance123"
-    nova_db_password:     "ChangeMeNova123"
-    neutron_db_password:  "ChangeMeNeutron123"
-    cinder_db_password:   "ChangeMeCinder123"
-
-    rabbit_password: "ChangeMeRabbit123"
     postgres_admin_password: "ChangeMePostgresAdmin123"
 
-    # List of OpenStack service DB users & passwords
-    openstack_db_users:
-      - { name: keystone, password: "{{ keystone_db_password }}" }
-      - { name: glance,   password: "{{ glance_db_password }}" }
-      - { name: nova,     password: "{{ nova_db_password }}" }
-      - { name: neutron,  password: "{{ neutron_db_password }}" }
-      - { name: cinder,   password: "{{ cinder_db_password }}" }
-
-    # Databases to create (Nova needs extra DBs)
-    openstack_databases:
-      - { name: keystone,   owner: keystone }
-      - { name: glance,     owner: glance }
-      - { name: nova,       owner: nova }
-      - { name: nova_api,   owner: nova }
-      - { name: nova_cell0, owner: nova }
-      - { name: neutron,    owner: neutron }
-      - { name: cinder,     owner: cinder }
-
-    # Allow override of pg_hba.conf path (auto-detected if empty)
-    pg_hba_conf: ""
-
   pre_tasks:
-    - name: Ensure Ansible remote tmp dir exists (avoid become_user chown issues)
-      file:
-        path: /tmp/.ansible/tmp
-        state: directory
-        mode: '1777'
-
     - name: Install PostgreSQL server and dependencies
       apt:
         name:
@@ -58,25 +21,19 @@
       register: pg_version_dir
       changed_when: false
 
-    - name: Set pg_hba_conf path dynamically (fallback to 14)
+    - name: Set pg_hba_conf path dynamically
       set_fact:
         pg_hba_conf: "{{ '/etc/postgresql/' + (pg_version_dir.stdout | default('14')) + '/main/pg_hba.conf' }}"
-      when: pg_hba_conf | length == 0
-
-    - name: Ensure postgres superuser password is set (first run)
-      command: >
-        psql -U postgres -c "ALTER USER postgres WITH PASSWORD '{{ postgres_admin_password }}';"
-      changed_when: false
-      no_log: true
-
-    - name: Ensure listen_addresses includes localhost
-      lineinfile:
-        path: "{{ pg_hba_conf | dirname }}/postgresql.conf"
-        regexp: "^#?listen_addresses\\s*="
-        line: "listen_addresses = 'localhost'"
-      notify: Restart PostgreSQL
 
   tasks:
+    - name: Ensure postgres superuser password is set (first run, local peer auth)
+      become: true
+      become_user: postgres
+      community.postgresql.postgresql_user:
+        name: postgres
+        password: "ChangeMePostgresAdmin123"
+        role_attr_flags: SUPERUSER
+
     - name: Adjust pg_hba.conf to md5 for IPv4 localhost
       lineinfile:
         path: "{{ pg_hba_conf }}"
@@ -103,11 +60,11 @@
       wait_for:
         host: 127.0.0.1
         port: 5432
-        delay: 1
+        delay: 2
         timeout: 30
 
     - name: Ensure service users (roles) exist
-      postgresql_user:
+      community.postgresql.postgresql_user:
         name: "{{ item.name }}"
         password: "{{ item.password }}"
         role_attr_flags: LOGIN
@@ -119,7 +76,7 @@
       no_log: true
 
     - name: Create OpenStack PostgreSQL databases with correct owners
-      postgresql_db:
+      community.postgresql.postgresql_db:
         name: "{{ item.name }}"
         owner: "{{ item.owner }}"
         encoding: UTF8
@@ -142,7 +99,7 @@
         enabled: yes
 
     - name: Create RabbitMQ user for OpenStack
-      rabbitmq_user:
+      community.rabbitmq.rabbitmq_user:
         user: openstack
         password: "{{ rabbit_password }}"
         permissions:
