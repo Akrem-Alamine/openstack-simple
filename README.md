@@ -44,10 +44,10 @@
 
 ### 📐 High-Level Architecture
 ```
-┌─────────────────────────────────────────────────────────────────────┐
+┌────────────────────────────────────────────────────────────────────┐
 │                    GCP VM Host (24GB RAM, 200GB)                   │
 │                        Ubuntu 22.04 LTS                            │
-│                                                                     │
+│                                                                    │
 │  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐     │
 │  │   Controller    │  │     Storage     │  │     Compute     │     │
 │  │   Node (VM)     │  │    Node (VM)    │  │    Node (VM)    │     │
@@ -67,14 +67,14 @@
 │  │ • RabbitMQ      │  │                 │  │                 │     │
 │  │ • Memcached     │  │                 │  │                 │     │
 │  └─────────────────┘  └─────────────────┘  └─────────────────┘     │
-│           │                     │                     │             │
-│           └─────────────────────┼─────────────────────┘             │
-│                               │                                     │
+│           │                    │                     │             │
+│           └────────────────────┼─────────────────────┘             │
+│                                │                                   │
 │  ┌─────────────────────────────┼─────────────────────────────┐     │
-│  │              Management Network (10.0.1.0/24)            │     │
-│  │                Provider Network (10.0.2.0/24)            │     │
+│  │              Management Network (10.0.1.0/24)             │     │
+│  │                Provider Network (10.0.2.0/24)             │     │
 │  └───────────────────────────────────────────────────────────┘     │
-└─────────────────────────────────────────────────────────────────────┘
+└────────────────────────────────────────────────────────────────────┘
 ```
 
 ### 🔗 Service Dependencies
@@ -124,12 +124,12 @@
 ## 📊 System Requirements
 
 ### 🖥️ Host System Requirements
-| Component | Minimum | Recommended |
-|-----------|---------|-------------|
-| **RAM** | 20GB | 24GB+ |
-| **CPU** | 8 cores | 12+ cores |
-| **Storage** | 150GB | 200GB+ SSD |
-| **OS** | Ubuntu 22.04 LTS | Ubuntu 22.04 LTS |
+| Component          | Minimum                       | Recommended           |
+|--------------------|-------------------------------|-----------------------|
+| **RAM**            | 20GB                          | 24GB+                 | 
+| **CPU**            | 8 cores                       | 12+ cores             |
+| **Storage**        | 150GB                         | 200GB+ SSD            |
+| **OS**             | Ubuntu 22.04 LTS              | Ubuntu 22.04 LTS      |
 | **Virtualization** | Nested virtualization enabled | Hardware acceleration |
 
 ### 🌐 Network Requirements
@@ -139,67 +139,41 @@
 - **Ports**: 22 (SSH), 80 (HTTP), 443 (HTTPS), 5000 (Keystone)
 
 ### 💾 VM Resource Allocation
-| Node | RAM | vCPUs | Disk | Primary Services |
-|------|-----|-------|------|-----------------|
-| **Controller** | 6GB | 3 | 50GB | API services, Database, Message Queue |
-| **Storage** | 4GB | 2 | 30GB | Block storage, Volume management |
-| **Compute** | 8GB | 4 | 60GB | Hypervisor, VM hosting |
-| **Total** | 18GB | 9 | 140GB | Complete OpenStack cloud |
+| Node           | RAM  | vCPUs | Disk  | Primary Services                      |
+|----------------|------|-------|-------|---------------------------------------|
+| **Controller** | 6GB  | 3     | 50GB  | API services, Database, Message Queue |
+| **Storage**    | 4GB  | 2     | 30GB  | Block storage, Volume management      |
+| **Compute**    | 8GB  | 4     | 60GB  | Hypervisor, VM hosting                |
+| **Total**      | 18GB | 9     | 140GB | Complete OpenStack cloud              |
 
 ## 📂 Project Structure
 
 ```
 openstack-simple/
 ├── 📋 README.md                          # This comprehensive guide
-├── 📋 deployment-commands.md              # Step-by-step deployment guide
-├── 📋 file-transfer-guide.md              # File transfer instructions
 ├── 🔧 ansible.cfg                        # Ansible configuration
 ├── 📂 inventory/
-│   └── hosts                             # VM inventory and groups
-├── 📂 group_vars/                        # Ansible variable files
-│   ├── all.yml                          # Global configuration
-│   ├── controller.yml                   # Controller node settings
-│   ├── storage.yml                      # Storage node settings
-│   └── compute.yml                      # Compute node settings
-├── 📂 host_vars/                         # Per-host variables (optional)
+│   ├── hosts                             # VM inventory and groups
+│   └──📂 group_vars/                     # Ansible variable files
+│      ├── all.yml                        # Global configuration
+│      ├── controller.yml                 # Controller node settings
+│      ├── storage.yml                    # Storage node settings
+│      └── compute.yml                    # Compute node settings
 ├── 📂 playbooks/                        # Ansible deployment playbooks
-│   ├── site.yml                         # Main deployment playbook
-│   ├── 00-prerequisites.yml             # System preparation
-│   ├── 01-database.yml                  # PostgreSQL & RabbitMQ setup
-│   ├── 02-keystone.yml                  # Identity service
-│   ├── 03-glance.yml                    # Image service
-│   ├── 04-nova.yml                      # Compute service
-│   ├── 05-neutron.yml                   # Networking service
-│   ├── 06-cinder.yml                    # Block storage service
-│   ├── 07-horizon.yml                   # Web dashboard
-│   └── 99-validation.yml                # Post-deployment validation
-├── 📂 roles/                            # Ansible roles (if using)
-│   ├── common/                          # Common tasks for all nodes
-│   ├── database/                        # Database setup role
-│   ├── keystone/                        # Identity service role
-│   ├── glance/                          # Image service role
-│   ├── nova/                            # Compute service role
-│   ├── neutron/                         # Networking service role
-│   ├── cinder/                          # Storage service role
-│   └── horizon/                         # Dashboard role
-├── 📂 scripts/                          # Helper scripts
-│   ├── quick-setup.sh                   # Interactive setup wizard
-│   ├── deploy.sh                        # Main deployment script
-│   ├── validate.sh                      # Validation and testing
-│   ├── cleanup.sh                       # Clean removal script
-│   ├── backup.sh                        # Configuration backup
-│   └── restore.sh                       # Configuration restore
-├── 📂 templates/                        # Configuration templates
-│   ├── controller/                      # Controller config templates
-│   ├── storage/                         # Storage config templates
-│   └── compute/                         # Compute config templates
-├── 📂 files/                            # Static files and patches
-├── 📂 logs/                             # Deployment logs
-└── 📂 docs/                             # Additional documentation
-    ├── architecture.md                  # Detailed architecture guide
-    ├── troubleshooting.md               # Comprehensive troubleshooting
-    ├── customization.md                 # Customization options
-    └── examples/                        # Usage examples
+│   ├── site.yml                          # Main deployment playbook
+│   ├── 00-prerequisites.yml              # System preparation
+│   ├── 01-database.yml                   # PostgreSQL & RabbitMQ setup
+│   ├── 02-keystone.yml                   # Identity service
+│   ├── 03-glance.yml                     # Image service
+│   ├── 04-nova.yml                       # Compute service
+│   ├── 05-neutron.yml                    # Networking service
+│   ├── 06-cinder.yml                     # Block storage service
+│   └── 07-horizon.yml                    # Web dashboard
+└── 📂 scripts/                          # Helper scripts
+    ├── deploy.sh                         # Main deployment script
+    ├── validate.sh                       # Validation and testing
+    └── cleanup.sh                        # Clean removal script
+
 ```
 
 ## 🔧 Installation
@@ -225,24 +199,6 @@ gcloud compute firewall-rules create allow-openstack \
   --allow tcp:22,tcp:80,tcp:443,tcp:5000,tcp:8080 \
   --source-ranges 0.0.0.0/0 \
   --target-tags openstack-host
-
-# 3. SSH to VM and run automated setup
-ssh username@YOUR-GCP-VM-IP
-wget -O - https://raw.githubusercontent.com/yourusername/openstack-simple/main/scripts/quick-setup.sh | bash
-```
-
-#### Option 2: Manual Setup
-```bash
-# 1. Clone the repository
-git clone https://github.com/yourusername/openstack-simple.git
-cd openstack-simple
-
-# 2. Make scripts executable
-chmod +x scripts/*.sh
-
-# 3. Run interactive setup
-./scripts/quick-setup.sh
-```
 
 ### 📝 Prerequisites Installation
 
@@ -424,65 +380,37 @@ ansible-playbook playbooks/06-cinder.yml -i inventory/hosts
 # 8. Deploy web dashboard
 ansible-playbook playbooks/07-horizon.yml -i inventory/hosts
 
-# 9. Validate deployment
-ansible-playbook playbooks/99-validation.yml -i inventory/hosts
 ```
 
 ### ⏱️ Deployment Timeline
-| Phase | Duration | Description |
-|-------|----------|-------------|
-| **Prerequisites** | 10-15 min | Package installation, user setup |
-| **Database Setup** | 5-10 min | PostgreSQL, RabbitMQ, Memcached |
-| **Keystone** | 5-10 min | Identity service configuration |
-| **Glance** | 5-10 min | Image service setup |
-| **Nova** | 10-15 min | Compute service deployment |
-| **Neutron** | 10-15 min | Networking configuration |
-| **Cinder** | 5-10 min | Block storage setup |
-| **Horizon** | 5-10 min | Web dashboard installation |
-| **Validation** | 5 min | Service verification |
-| **Total** | **60-90 min** | Complete deployment |
+| Phase              | Duration      | Description                      |
+|--------------------|---------------|----------------------------------|
+| **Prerequisites**  | 10-15 min     | Package installation, user setup |
+| **Database Setup** | 5-10 min      | PostgreSQL, RabbitMQ, Memcached  |
+| **Keystone**       | 5-10 min      | Identity service configuration   |
+| **Glance**         | 5-10 min      | Image service setup              |
+| **Nova**           | 10-15 min     | Compute service deployment       |
+| **Neutron**        | 10-15 min     | Networking configuration         |
+| **Cinder**         | 5-10 min      | Block storage setup              |
+| **Horizon**        | 5-10 min      | Web dashboard installation       |
+| **Total**          | **60-90 min** | Complete deployment              |
 
 ## 🌐 Access & Usage
 
 ### 🔐 Default Credentials
 
 #### System Access
-| Component | Username | Password | Notes |
-|-----------|----------|----------|-------|
-| **VM SSH** | ubuntu | ubuntu123 | All VMs |
-| **Database** | root | db_pass123 | PostgreSQL |
-| **RabbitMQ** | openstack | rabbit123 | Message queue |
+| Component    | Username  | Password   | Notes         |
+|--------------|-----------|------------|---------------|
+| **VM SSH**   | ubuntu    | ubuntu123  | All VMs       |
+| **Database** | root      | db_pass123 | PostgreSQL    |
+| **RabbitMQ** | openstack | rabbit123  | Message queue |
 
 #### OpenStack Access
-| User | Password | Domain | Project | Role |
-|------|----------|--------|---------|------|
-| **admin** | openstack123 | Default | admin | admin |
-| **demo** | demo123 | Default | demo | user |
-
-### 🌍 Web Dashboard Access
-
-#### Local Access (on VM host)
-```bash
-# Direct access
-http://CONTROLLER_IP/horizon
-
-# Example
-http://10.0.1.10/horizon
-```
-
-#### Remote Access via SSH Tunnel
-```bash
-# From your local machine
-ssh -L 8080:CONTROLLER_IP:80 username@GCP-VM-IP
-
-# Then open browser
-http://localhost:8080/horizon
-
-# Login credentials
-Username: admin
-Password: openstack123
-Domain: Default
-```
+| User      | Password     | Domain  | Project | Role  |
+|-----------|--------------|---------|---------|-------|
+| **admin** | openstack123 | Default | admin   | admin |
+| **demo**  | demo123      | Default | demo    | user  |
 
 ### 🖥️ Command Line Access
 
@@ -659,63 +587,6 @@ sudo tgtadm --mode target --op show
 # Check volume service
 sudo systemctl status cinder-volume
 sudo systemctl status tgt
-```
-
-### 🔧 Advanced Troubleshooting
-
-#### Debug Mode Deployment
-```bash
-# Run with verbose output
-ansible-playbook playbooks/site.yml -i inventory/hosts -vvv
-
-# Check specific tasks
-ansible-playbook playbooks/site.yml -i inventory/hosts --start-at-task="task name"
-```
-
-#### Service Configuration Validation
-```bash
-# Validate configuration files
-sudo keystone-manage doctor
-sudo nova-manage api_db sync
-sudo neutron-db-manage current
-```
-
-#### Network Debugging
-```bash
-# Test network connectivity between nodes
-ansible all -i inventory/hosts -m ping
-
-# Check OpenStack network connectivity
-openstack network agent list
-openstack port list
-openstack router list
-```
-
-### 📋 Recovery Procedures
-
-#### Service Recovery
-```bash
-# Restart all OpenStack services
-sudo systemctl restart apache2
-sudo systemctl restart nova-api nova-scheduler nova-conductor
-sudo systemctl restart neutron-server
-sudo systemctl restart cinder-api cinder-scheduler
-```
-
-#### Database Recovery
-```bash
-# Backup current state
-sudo -u postgres pg_dumpall > openstack_backup.sql
-
-# Restore from backup
-sudo -u postgres psql < openstack_backup.sql
-```
-
-#### Complete Reset
-```bash
-# Clean deployment and start over
-./scripts/cleanup.sh
-./scripts/deploy.sh
 ```
 
 ## 📖 Advanced Configuration
